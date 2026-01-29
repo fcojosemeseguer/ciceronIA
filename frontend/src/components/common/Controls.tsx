@@ -20,6 +20,7 @@ interface ControlsProps {
   isLastRound: boolean;
   nextTeam: TeamPosition | null;
   debateState: 'setup' | 'paused' | 'running' | 'finished';
+  currentTeam: TeamPosition;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -35,6 +36,7 @@ export const Controls: React.FC<ControlsProps> = ({
   isLastRound,
   nextTeam,
   debateState,
+  currentTeam,
 }) => {
   const isFinished = debateState === 'finished';
 
@@ -44,12 +46,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {!isLastRound && (
         <button
           onClick={onPrevious}
-          disabled={!hasNextTeamATurn || isFinished}
+          disabled={!hasNextTeamATurn || isFinished || currentTeam === 'A'}
           className={`
             flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
             transition-smooth border-2 text-xs sm:text-sm
             ${
-              hasNextTeamATurn && !isFinished
+              hasNextTeamATurn && !isFinished && currentTeam !== 'A'
                 ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
                 : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
             }
@@ -86,12 +88,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {!isLastRound ? (
         <button
           onClick={onNext}
-          disabled={!hasNextTeamBTurn || isFinished}
+          disabled={!hasNextTeamBTurn || isFinished || currentTeam === 'B'}
           className={`
             flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
             transition-smooth border-2 text-xs sm:text-sm
             ${
-              hasNextTeamBTurn && !isFinished
+              hasNextTeamBTurn && !isFinished && currentTeam !== 'B'
                 ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
                 : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
             }

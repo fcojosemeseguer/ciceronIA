@@ -181,6 +181,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
              isLastRound={isLastRound()}
              nextTeam={currentTeam === 'A' ? 'B' : 'A'}
              debateState={state}
+             currentTeam={currentTeam}
            />
 
           {/* Estado general - Responsive */}
