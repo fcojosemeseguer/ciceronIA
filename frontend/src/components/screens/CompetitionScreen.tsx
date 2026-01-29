@@ -27,6 +27,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     resumeDebate,
     nextRound,
     previousRound,
+    skipToNextRound,
     finishDebate,
     getCurrentRound,
     getTeamName,
@@ -57,12 +58,12 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
   };
 
   const handleNext = () => {
-    console.log('Next round');
-    nextRound();
+    console.log('Turno B - Skip to next round');
+    skipToNextRound();
   };
 
   const handlePrevious = () => {
-    console.log('Previous round');
+    console.log('Turno A - Return to previous round');
     previousRound();
   };
 
@@ -81,13 +82,8 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     }
   }, [state, onFinish]);
 
-  // Auto-start debate cuando el componente monta en estado 'setup'
-  useEffect(() => {
-    if (state === 'setup') {
-      console.log('🎬 Auto-starting debate from setup...');
-      startDebate();
-    }
-  }, []);
+  // Don't auto-start - user must click Play button
+  // Timer starts paused in 'setup' state until user clicks Play
 
   return (
     <div className="cinema-background w-full h-screen overflow-hidden flex flex-col">

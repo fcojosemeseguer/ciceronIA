@@ -53,6 +53,7 @@ interface DebateStore extends DebateSessionState {
   pauseDebate: () => void;
   resumeDebate: () => void;
   startDebate: () => void;
+  skipToNextRound: () => void;
   nextRound: () => void;
   previousRound: () => void;
   finishDebate: () => void;
@@ -124,6 +125,33 @@ export const useDebateStore = create<DebateStore>()(
       set({ state: 'running', isTimerRunning: true });
     },
 
+    skipToNextRound: () => {
+      const state = get();
+      const currentRound = state.getCurrentRound();
+
+      if (!currentRound) return;
+
+      if (isLastRound(state.currentRoundIndex)) {
+        get().finishDebate();
+        return;
+      }
+
+      const nextIndex = state.currentRoundIndex + 1;
+      const nextRounds = generateDebateRounds(state.config);
+      const nextRound = nextRounds[nextIndex];
+
+      if (nextRound) {
+        // Skip to next round and START the timer immediately
+        set({
+          currentRoundIndex: nextIndex,
+          currentTeam: nextRound.team,
+          timeRemaining: nextRound.duration,
+          isTimerRunning: true, // Auto-start timer
+          state: 'running', // Ensure running state
+        });
+      }
+    },
+
     nextRound: () => {
       const state = get();
       const currentRound = state.getCurrentRound();
@@ -144,7 +172,7 @@ export const useDebateStore = create<DebateStore>()(
           currentRoundIndex: nextIndex,
           currentTeam: nextRound.team,
           timeRemaining: nextRound.duration,
-          isTimerRunning: true,
+          isTimerRunning: false, // Don't auto-start timer on nextRound
         });
       }
     },
@@ -163,7 +191,7 @@ export const useDebateStore = create<DebateStore>()(
           currentRoundIndex: prevIndex,
           currentTeam: prevRound.team,
           timeRemaining: prevRound.duration,
-          isTimerRunning: true,
+          isTimerRunning: false, // Don't auto-start timer on previousRound
         });
       }
     },
