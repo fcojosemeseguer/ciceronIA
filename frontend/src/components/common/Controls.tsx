@@ -1,5 +1,6 @@
 /**
  * Componente Controls - Controles inferiores (Play/Pause, Previous/Next)
+ * Responsivo: Desktop, Tablet, Mobile
  */
 
 import React from 'react';
@@ -31,23 +32,24 @@ export const Controls: React.FC<ControlsProps> = ({
   const isFinished = debateState === 'finished';
 
   return (
-    <div className="flex justify-center items-center gap-8">
+    <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 md:gap-8 flex-wrap">
       {/* Botón Turno Anterior */}
       <button
         onClick={onPrevious}
         disabled={!canGoPrevious || isSetup || isFinished}
         className={`
-          flex items-center gap-2 px-6 py-3 rounded-lg font-semibold
-          transition-smooth border-2
+          flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
+          transition-smooth border-2 text-xs sm:text-sm
           ${
             canGoPrevious && !isSetup && !isFinished
-              ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg'
+              ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
               : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
           }
         `}
       >
-        <ChevronLeft size={20} />
-        <span>Turno A</span>
+        <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+        <span className="hidden sm:inline">Turno A</span>
+        <span className="sm:hidden">A</span>
       </button>
 
       {/* Botón Play/Pause Central */}
@@ -55,8 +57,8 @@ export const Controls: React.FC<ControlsProps> = ({
         onClick={onPlayPause}
         disabled={isSetup || isFinished}
         className={`
-          flex items-center justify-center w-16 h-16 rounded-full
-          transition-smooth border-4 font-semibold
+          flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full
+          transition-smooth border-4 font-semibold active:scale-95
           ${
             isSetup || isFinished
               ? 'bg-gray-700/40 border-gray-600/40 text-gray-500 cursor-not-allowed'
@@ -64,7 +66,11 @@ export const Controls: React.FC<ControlsProps> = ({
           }
         `}
       >
-        {isRunning ? <Pause size={28} /> : <Play size={28} />}
+        {isRunning ? (
+          <Pause size={24} className="sm:w-7 sm:h-7" />
+        ) : (
+          <Play size={24} className="sm:w-7 sm:h-7" />
+        )}
       </button>
 
       {/* Botón Turno Siguiente */}
@@ -72,17 +78,18 @@ export const Controls: React.FC<ControlsProps> = ({
         onClick={onNext}
         disabled={!canGoNext || isSetup || isFinished}
         className={`
-          flex items-center gap-2 px-6 py-3 rounded-lg font-semibold
-          transition-smooth border-2
+          flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
+          transition-smooth border-2 text-xs sm:text-sm
           ${
             canGoNext && !isSetup && !isFinished
-              ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg'
+              ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
               : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
           }
         `}
       >
-        <span>Turno B</span>
-        <ChevronRight size={20} />
+        <span className="hidden sm:inline">Turno B</span>
+        <span className="sm:hidden">B</span>
+        <ChevronRight size={16} className="sm:w-5 sm:h-5" />
       </button>
     </div>
   );

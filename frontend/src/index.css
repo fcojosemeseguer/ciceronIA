@@ -25,13 +25,13 @@ code {
 
 /* Cinemática background con glows */
 .cinema-background {
-  position: fixed;
-  inset: 0;
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
   background-image:
     radial-gradient(circle at 10% 50%, rgba(220, 38, 38, 0.15) 0%, transparent 50%),
     radial-gradient(circle at 90% 50%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
     linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1729 100%);
-  overflow: hidden;
 }
 
 .cinema-background::after {
