@@ -32,6 +32,9 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     getTeamName,
     canGoToNextRound,
     canGoToPreviousRound,
+    hasNextTeamATurn,
+    hasNextTeamBTurn,
+    isLastRound,
   } = useDebateStore();
 
   const { isRecording, audioError } = useAutoAudioRecording();
@@ -64,6 +67,12 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
   const handlePrevious = () => {
     console.log('Turno A - Go to next Team A turn');
     goToNextTeamATurn();
+  };
+
+  const handleEndDebate = () => {
+    console.log('End Debate - Finalizing debate');
+    finishDebate();
+    onFinish?.();
   };
 
   // Finalizar automáticamente en el último turno cuando el tiempo llega a 0
@@ -158,17 +167,21 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
             )}
           </div>
 
-          {/* Controles de navegación */}
-          <Controls
-            isRunning={isTimerRunning}
-            onPlayPause={handlePlayPause}
-            onPrevious={handlePrevious}
-            onNext={handleNext}
-            canGoNext={canGoToNextRound()}
-            canGoPrevious={canGoToPreviousRound()}
-            nextTeam={currentTeam === 'A' ? 'B' : 'A'}
-            debateState={state}
-          />
+           {/* Controles de navegación */}
+           <Controls
+             isRunning={isTimerRunning}
+             onPlayPause={handlePlayPause}
+             onPrevious={handlePrevious}
+             onNext={handleNext}
+             onEndDebate={handleEndDebate}
+             canGoNext={canGoToNextRound()}
+             canGoPrevious={canGoToPreviousRound()}
+             hasNextTeamATurn={hasNextTeamATurn()}
+             hasNextTeamBTurn={hasNextTeamBTurn()}
+             isLastRound={isLastRound()}
+             nextTeam={currentTeam === 'A' ? 'B' : 'A'}
+             debateState={state}
+           />
 
           {/* Estado general - Responsive */}
           <div className="flex flex-col sm:flex-row justify-between items-center mt-2 sm:mt-4 md:mt-6 text-xs md:text-sm text-gray-400 gap-1 sm:gap-2">

@@ -12,8 +12,12 @@ interface ControlsProps {
   onPlayPause: () => void;
   onPrevious: () => void;
   onNext: () => void;
+  onEndDebate?: () => void;
   canGoNext: boolean;
   canGoPrevious: boolean;
+  hasNextTeamATurn: boolean;
+  hasNextTeamBTurn: boolean;
+  isLastRound: boolean;
   nextTeam: TeamPosition | null;
   debateState: 'setup' | 'paused' | 'running' | 'finished';
 }
@@ -23,8 +27,12 @@ export const Controls: React.FC<ControlsProps> = ({
   onPlayPause,
   onPrevious,
   onNext,
+  onEndDebate,
   canGoNext,
   canGoPrevious,
+  hasNextTeamATurn,
+  hasNextTeamBTurn,
+  isLastRound,
   nextTeam,
   debateState,
 }) => {
@@ -32,26 +40,28 @@ export const Controls: React.FC<ControlsProps> = ({
 
   return (
     <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 md:gap-8 flex-wrap">
-      {/* Botón Turno Anterior */}
-      <button
-        onClick={onPrevious}
-        disabled={!canGoPrevious || isFinished}
-        className={`
-          flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
-          transition-smooth border-2 text-xs sm:text-sm
-          ${
-            canGoPrevious && !isFinished
-              ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
-              : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
-          }
-        `}
-      >
-        <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
-        <span className="hidden sm:inline">Turno A</span>
-        <span className="sm:hidden">A</span>
-      </button>
+      {/* Only show Turno A if there's a next Team A turn */}
+      {!isLastRound && (
+        <button
+          onClick={onPrevious}
+          disabled={!hasNextTeamATurn || isFinished}
+          className={`
+            flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
+            transition-smooth border-2 text-xs sm:text-sm
+            ${
+              hasNextTeamATurn && !isFinished
+                ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
+                : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
+            }
+          `}
+        >
+          <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+          <span className="hidden sm:inline">Turno A</span>
+          <span className="sm:hidden">A</span>
+        </button>
+      )}
 
-      {/* Botón Play/Pause Central */}
+      {/* Play/Pause Central Button */}
       <button
         onClick={onPlayPause}
         disabled={isFinished}
@@ -72,24 +82,43 @@ export const Controls: React.FC<ControlsProps> = ({
         )}
       </button>
 
-      {/* Botón Turno Siguiente */}
-      <button
-        onClick={onNext}
-        disabled={!canGoNext || isFinished}
-        className={`
-          flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
-          transition-smooth border-2 text-xs sm:text-sm
-          ${
-            canGoNext && !isFinished
-              ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
-              : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
-          }
-        `}
-      >
-        <span className="hidden sm:inline">Turno B</span>
-        <span className="sm:hidden">B</span>
-        <ChevronRight size={16} className="sm:w-5 sm:h-5" />
-      </button>
+      {/* Show Turno B if not last round, otherwise show End Debate button */}
+      {!isLastRound ? (
+        <button
+          onClick={onNext}
+          disabled={!hasNextTeamBTurn || isFinished}
+          className={`
+            flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
+            transition-smooth border-2 text-xs sm:text-sm
+            ${
+              hasNextTeamBTurn && !isFinished
+                ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
+                : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
+            }
+          `}
+        >
+          <span className="hidden sm:inline">Turno B</span>
+          <span className="sm:hidden">B</span>
+          <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+        </button>
+      ) : (
+        <button
+          onClick={onEndDebate}
+          disabled={isFinished}
+          className={`
+            flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
+            transition-smooth border-2 text-xs sm:text-sm
+            ${
+              !isFinished
+                ? 'bg-green-900/50 border-green-600 text-green-200 hover:bg-green-800/60 hover:shadow-lg active:scale-95'
+                : 'bg-green-900/20 border-green-600/30 text-green-400/50 cursor-not-allowed'
+            }
+          `}
+        >
+          <span className="hidden sm:inline">Finalizar Debate</span>
+          <span className="sm:hidden">Fin</span>
+        </button>
+      )}
     </div>
   );
 };

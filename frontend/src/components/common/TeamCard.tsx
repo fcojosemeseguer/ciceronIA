@@ -67,16 +67,16 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Tiempo</p>
       </div>
 
-      {/* Temporizador digital */}
-      <div
-        className={`
-          text-center digital-timer transition-smooth
-          text-3xl sm:text-5xl md:text-6xl
-          ${isActive ? (isTeamA ? 'text-white' : 'text-white') : 'text-gray-500'}
-        `}
-      >
-        {formatTime(timeRemaining)}
-      </div>
+       {/* Temporizador digital */}
+       <div
+         className={`
+           text-center digital-timer transition-smooth
+           text-3xl sm:text-5xl md:text-6xl
+           ${isActive ? (isTeamA ? 'text-white' : 'text-white') : 'text-gray-500'}
+         `}
+       >
+         {isActive ? formatTime(timeRemaining) : '00:00'}
+       </div>
 
       {/* Barra de progreso */}
       <div className="mt-auto">

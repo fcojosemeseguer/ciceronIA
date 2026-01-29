@@ -64,12 +64,14 @@ interface DebateStore extends DebateSessionState {
   addRecording: (recording: AudioRecording) => void;
   getRecordings: () => AudioRecording[];
 
-  // Getters
-  getCurrentRound: () => ReturnType<typeof getCurrentRoundInfo>;
-  getTeamName: (team: TeamPosition) => string;
-  isLastRound: () => boolean;
-  canGoToNextRound: () => boolean;
-  canGoToPreviousRound: () => boolean;
+   // Getters
+   getCurrentRound: () => ReturnType<typeof getCurrentRoundInfo>;
+   getTeamName: (team: TeamPosition) => string;
+   isLastRound: () => boolean;
+   canGoToNextRound: () => boolean;
+   canGoToPreviousRound: () => boolean;
+   hasNextTeamATurn: () => boolean;
+   hasNextTeamBTurn: () => boolean;
 }
 
 export const useDebateStore = create<DebateStore>()(
@@ -159,14 +161,14 @@ export const useDebateStore = create<DebateStore>()(
       const state = get();
       const nextRounds = generateDebateRounds(state.config);
       
-      // Search from current position forward for Team A's next turn
+      // Search from NEXT position (not current + 1, but just next)
       for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
         if (nextRounds[i].team === 'A') {
           set({
             currentRoundIndex: i,
             currentTeam: 'A',
             timeRemaining: nextRounds[i].duration,
-            isTimerRunning: true, // Auto-start timer
+            isTimerRunning: true,
             state: 'running',
           });
           console.log(`🎬 Jumping to Team A turn at round ${i + 1}`);
@@ -180,14 +182,14 @@ export const useDebateStore = create<DebateStore>()(
       const state = get();
       const nextRounds = generateDebateRounds(state.config);
       
-      // Search from current position forward for Team B's next turn
+      // Search from NEXT position (not current + 1, but just next)
       for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
         if (nextRounds[i].team === 'B') {
           set({
             currentRoundIndex: i,
             currentTeam: 'B',
             timeRemaining: nextRounds[i].duration,
-            isTimerRunning: true, // Auto-start timer
+            isTimerRunning: true,
             state: 'running',
           });
           console.log(`🎬 Jumping to Team B turn at round ${i + 1}`);
@@ -279,5 +281,27 @@ export const useDebateStore = create<DebateStore>()(
       const state = get();
       return state.currentRoundIndex > 0;
     },
-  }))
+
+    hasNextTeamATurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'A') {
+          return true;
+        }
+      }
+      return false;
+    },
+
+    hasNextTeamBTurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'B') {
+          return true;
+        }
+      }
+      return false;
+    },
+   }))
 );
