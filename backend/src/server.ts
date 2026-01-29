@@ -1,11 +1,13 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 
 import apiRoutes from './routes/api';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 import { initializeDatabase } from './services/database';
+import { swaggerSpec } from './config/swagger';
 
 // Load environment variables
 dotenv.config();
@@ -34,6 +36,21 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use((req, _res, next) => {
   logger.info(`${req.method} ${req.path}`);
   next();
+});
+
+/**
+ * Swagger Documentation
+ */
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
+  customCss: '.swagger-ui .topbar { display: none }',
+}));
+
+app.get('/api/docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
 });
 
 /**
