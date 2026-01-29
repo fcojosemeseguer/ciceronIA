@@ -25,9 +25,8 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     startDebate,
     pauseDebate,
     resumeDebate,
-    nextRound,
-    previousRound,
-    skipToNextRound,
+    goToNextTeamATurn,
+    goToNextTeamBTurn,
     finishDebate,
     getCurrentRound,
     getTeamName,
@@ -58,13 +57,13 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
   };
 
   const handleNext = () => {
-    console.log('Turno B - Skip to next round');
-    skipToNextRound();
+    console.log('Turno B - Go to next Team B turn');
+    goToNextTeamBTurn();
   };
 
   const handlePrevious = () => {
-    console.log('Turno A - Return to previous round');
-    previousRound();
+    console.log('Turno A - Go to next Team A turn');
+    goToNextTeamATurn();
   };
 
   // Finalizar automáticamente en el último turno cuando el tiempo llega a 0

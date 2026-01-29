@@ -28,7 +28,6 @@ export const Controls: React.FC<ControlsProps> = ({
   nextTeam,
   debateState,
 }) => {
-  const isSetup = debateState === 'setup';
   const isFinished = debateState === 'finished';
 
   return (

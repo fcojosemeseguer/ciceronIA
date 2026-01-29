@@ -54,6 +54,8 @@ interface DebateStore extends DebateSessionState {
   resumeDebate: () => void;
   startDebate: () => void;
   skipToNextRound: () => void;
+  goToNextTeamATurn: () => void;
+  goToNextTeamBTurn: () => void;
   nextRound: () => void;
   previousRound: () => void;
   finishDebate: () => void;
@@ -149,6 +151,48 @@ export const useDebateStore = create<DebateStore>()(
           isTimerRunning: true, // Auto-start timer
           state: 'running', // Ensure running state
         });
+      }
+    },
+
+    // Find next round where Team A speaks and skip to it
+    goToNextTeamATurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      
+      // Search from current position forward for Team A's next turn
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'A') {
+          set({
+            currentRoundIndex: i,
+            currentTeam: 'A',
+            timeRemaining: nextRounds[i].duration,
+            isTimerRunning: true, // Auto-start timer
+            state: 'running',
+          });
+          console.log(`🎬 Jumping to Team A turn at round ${i + 1}`);
+          return;
+        }
+      }
+    },
+
+    // Find next round where Team B speaks and skip to it
+    goToNextTeamBTurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      
+      // Search from current position forward for Team B's next turn
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'B') {
+          set({
+            currentRoundIndex: i,
+            currentTeam: 'B',
+            timeRemaining: nextRounds[i].duration,
+            isTimerRunning: true, // Auto-start timer
+            state: 'running',
+          });
+          console.log(`🎬 Jumping to Team B turn at round ${i + 1}`);
+          return;
+        }
       }
     },
 
