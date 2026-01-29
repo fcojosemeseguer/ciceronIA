@@ -18,7 +18,7 @@ export interface AudioRecordingMetadata {
   id: string;
   debateId: string;
   team: 'A' | 'B';
-  roundType: 'Introducción' | 'Primer Refutador' | 'Segundo Refutador' | 'Conclusión';
+  roundType: string; // Can be any round type string
   order: number;
   timestamp: string;
   duration: number;

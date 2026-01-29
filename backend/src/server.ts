@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import apiRoutes from './routes/api';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
+import { initializeDatabase } from './services/database';
 
 // Load environment variables
 dotenv.config();
@@ -49,10 +50,19 @@ app.use(errorHandler);
 /**
  * Start server
  */
-const server = app.listen(port, () => {
+const server = app.listen(port, async () => {
   logger.info(`CiceronAI Backend Server running on port ${port}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+
+  // Initialize database on startup
+  try {
+    await initializeDatabase();
+    logger.info('Database initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize database', error);
+    process.exit(1);
+  }
 });
 
 export default app;
