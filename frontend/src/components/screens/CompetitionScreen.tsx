@@ -81,9 +81,17 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     }
   }, [state, onFinish]);
 
+  // Auto-start debate cuando el componente monta en estado 'setup'
+  useEffect(() => {
+    if (state === 'setup') {
+      console.log('🎬 Auto-starting debate from setup...');
+      startDebate();
+    }
+  }, []);
+
   return (
-    <div className="cinema-background w-screen h-screen overflow-auto md:overflow-hidden">
-      <div className="relative z-10 w-screen min-h-screen md:h-screen flex flex-col">
+    <div className="cinema-background w-full h-screen overflow-hidden flex flex-col">
+      <div className="relative z-10 w-full h-full flex flex-col">
         {/* Encabezado con tema - Responsive */}
         <div className="flex-shrink-0 border-b-2 border-gray-700/50 p-2 sm:p-3 md:p-4 text-center">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white opacity-90 line-clamp-2 sm:line-clamp-1">

@@ -36,12 +36,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {/* Botón Turno Anterior */}
       <button
         onClick={onPrevious}
-        disabled={!canGoPrevious || isSetup || isFinished}
+        disabled={!canGoPrevious || isFinished}
         className={`
           flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
           transition-smooth border-2 text-xs sm:text-sm
           ${
-            canGoPrevious && !isSetup && !isFinished
+            canGoPrevious && !isFinished
               ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
               : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
           }
@@ -55,12 +55,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {/* Botón Play/Pause Central */}
       <button
         onClick={onPlayPause}
-        disabled={isSetup || isFinished}
+        disabled={isFinished}
         className={`
           flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full
           transition-smooth border-4 font-semibold active:scale-95
           ${
-            isSetup || isFinished
+            isFinished
               ? 'bg-gray-700/40 border-gray-600/40 text-gray-500 cursor-not-allowed'
               : 'bg-black border-gray-600 text-white hover:border-gray-400 hover:shadow-glow-blue'
           }
@@ -76,12 +76,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {/* Botón Turno Siguiente */}
       <button
         onClick={onNext}
-        disabled={!canGoNext || isSetup || isFinished}
+        disabled={!canGoNext || isFinished}
         className={`
           flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
           transition-smooth border-2 text-xs sm:text-sm
           ${
-            canGoNext && !isSetup && !isFinished
+            canGoNext && !isFinished
               ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
               : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
           }

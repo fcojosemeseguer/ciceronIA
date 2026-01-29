@@ -6,8 +6,16 @@
   box-sizing: border-box;
 }
 
+html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  width: 100%;
+  height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -16,6 +24,11 @@ body {
   background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1729 100%);
   color: white;
   overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
 }
 
 code {

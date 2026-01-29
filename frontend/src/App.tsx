@@ -31,7 +31,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen min-h-screen overflow-hidden">
+    <div className="w-full h-screen overflow-hidden">
       {showSetup ? (
         <SetupScreen onStartDebate={handleStartDebate} />
       ) : (

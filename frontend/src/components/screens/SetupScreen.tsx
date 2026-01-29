@@ -53,8 +53,8 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate }) => {
   };
 
   return (
-    <div className="cinema-background w-screen min-h-screen flex items-center justify-center overflow-auto">
-      <div className="relative z-10 w-full max-w-4xl p-4 sm:p-6 md:p-8 py-8">
+    <div className="cinema-background w-full h-screen flex items-center justify-center overflow-auto">
+      <div className="relative z-10 w-full max-w-4xl p-4 sm:p-6 md:p-8 py-8 my-auto">
         {/* Encabezado */}
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-white to-blue-400 mb-2">
