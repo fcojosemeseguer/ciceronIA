@@ -72,6 +72,8 @@ interface DebateStore extends DebateSessionState {
    canGoToPreviousRound: () => boolean;
    hasNextTeamATurn: () => boolean;
    hasNextTeamBTurn: () => boolean;
+   canNavigateToTeamATurn: () => boolean;
+   canNavigateToTeamBTurn: () => boolean;
 }
 
 export const useDebateStore = create<DebateStore>()(
@@ -298,6 +300,42 @@ export const useDebateStore = create<DebateStore>()(
       const nextRounds = generateDebateRounds(state.config);
       for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
         if (nextRounds[i].team === 'B') {
+          return true;
+        }
+      }
+      return false;
+    },
+
+    canNavigateToTeamATurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      
+      // Search for next Team A turn
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'A') {
+          // Block only if Team A is currently active AND this is Team A's NEXT turn (not sequential)
+          // In other words, allow navigation if going to the immediate next round
+          if (state.currentTeam === 'A' && i !== state.currentRoundIndex + 1) {
+            return false;
+          }
+          return true;
+        }
+      }
+      return false;
+    },
+
+    canNavigateToTeamBTurn: () => {
+      const state = get();
+      const nextRounds = generateDebateRounds(state.config);
+      
+      // Search for next Team B turn
+      for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
+        if (nextRounds[i].team === 'B') {
+          // Block only if Team B is currently active AND this is Team B's NEXT turn (not sequential)
+          // In other words, allow navigation if going to the immediate next round
+          if (state.currentTeam === 'B' && i !== state.currentRoundIndex + 1) {
+            return false;
+          }
           return true;
         }
       }

@@ -32,9 +32,9 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     getTeamName,
     canGoToNextRound,
     canGoToPreviousRound,
-    hasNextTeamATurn,
-    hasNextTeamBTurn,
     isLastRound,
+    canNavigateToTeamATurn,
+    canNavigateToTeamBTurn,
   } = useDebateStore();
 
   const { isRecording, audioError } = useAutoAudioRecording();
@@ -176,8 +176,8 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
              onEndDebate={handleEndDebate}
              canGoNext={canGoToNextRound()}
              canGoPrevious={canGoToPreviousRound()}
-             hasNextTeamATurn={hasNextTeamATurn()}
-             hasNextTeamBTurn={hasNextTeamBTurn()}
+             hasNextTeamATurn={canNavigateToTeamATurn()}
+             hasNextTeamBTurn={canNavigateToTeamBTurn()}
              isLastRound={isLastRound()}
              nextTeam={currentTeam === 'A' ? 'B' : 'A'}
              debateState={state}

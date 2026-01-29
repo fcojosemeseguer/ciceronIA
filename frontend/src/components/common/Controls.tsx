@@ -46,12 +46,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {!isLastRound && (
         <button
           onClick={onPrevious}
-          disabled={!hasNextTeamATurn || isFinished || currentTeam === 'A'}
+          disabled={!hasNextTeamATurn || isFinished}
           className={`
             flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
             transition-smooth border-2 text-xs sm:text-sm
             ${
-              hasNextTeamATurn && !isFinished && currentTeam !== 'A'
+              hasNextTeamATurn && !isFinished
                 ? 'bg-red-900/50 border-red-600 text-red-200 hover:bg-red-800/60 hover:shadow-lg active:scale-95'
                 : 'bg-red-900/20 border-red-600/30 text-red-400/50 cursor-not-allowed'
             }
@@ -88,12 +88,12 @@ export const Controls: React.FC<ControlsProps> = ({
       {!isLastRound ? (
         <button
           onClick={onNext}
-          disabled={!hasNextTeamBTurn || isFinished || currentTeam === 'B'}
+          disabled={!hasNextTeamBTurn || isFinished}
           className={`
             flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold
             transition-smooth border-2 text-xs sm:text-sm
             ${
-              hasNextTeamBTurn && !isFinished && currentTeam !== 'B'
+              hasNextTeamBTurn && !isFinished
                 ? 'bg-blue-900/50 border-blue-600 text-blue-200 hover:bg-blue-800/60 hover:shadow-lg active:scale-95'
                 : 'bg-blue-900/20 border-blue-600/30 text-blue-400/50 cursor-not-allowed'
             }
