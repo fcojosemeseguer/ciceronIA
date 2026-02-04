@@ -1,0 +1,14 @@
+"fastapi[standard]"
+langchain
+langchain-openai
+tinydb
+"passlib[bcrypt]"
+faster-whisper
+pyannote.audio
+torch
+python-dotenv
+pydub
+opensmile
+pandas
+audioop-lts
+langchain_community
