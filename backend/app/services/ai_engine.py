@@ -60,7 +60,7 @@ class TinyDBChatMessageHistory(BaseChatMessageHistory):
 
 
 def setup_chat(project_id: str):
-    llm = ChatOpenAI(model="gpt-5-nano-2025-08-07", temperature=0)
+    llm = ChatOpenAI(model="gpt-5-2025-08-07", temperature=0)
     # llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", temperature=0)
 
     prompt = ChatPromptTemplate.from_messages([

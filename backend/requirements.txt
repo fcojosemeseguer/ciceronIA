@@ -1,8 +1,9 @@
-"fastapi[standard]"
+fastapi[standard]
 langchain
 langchain-openai
 tinydb
-"passlib[bcrypt]"
+passlib>=1.7.4
+bcrypt>=4.1.2
 faster-whisper
 pyannote.audio
 torch
@@ -12,3 +13,4 @@ opensmile
 pandas
 audioop-lts
 langchain_community
+pyjwt
