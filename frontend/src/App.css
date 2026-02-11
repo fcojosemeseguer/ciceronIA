@@ -1,0 +1,16 @@
+/* App CSS - Estilos globales generales
+   Los estilos principales están en index.css */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
