@@ -32,46 +32,36 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   return (
     <div
       className={`
-        flex flex-col gap-3 sm:gap-4 md:gap-6 p-3 sm:p-4 md:p-6 rounded-lg sm:rounded-2xl
+        flex flex-col gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-2xl
         border-2 sm:border-4 border-black
         ${isActive ? 'transition-smooth' : 'opacity-40 md:opacity-50 transition-smooth'}
-        ${isActive && isTeamA ? 'glow-pulse-red' : ''}
-        ${isActive && !isTeamA ? 'glow-pulse-blue' : ''}
-        min-h-64 sm:min-h-72 md:min-h-80 flex-1
+        ${isActive && isTeamA ? 'glow-pulse-orange' : ''}
+        ${isActive && !isTeamA ? 'glow-pulse-cyan' : ''}
+        min-h-20 sm:min-h-24 md:min-h-28 flex-1
       `}
       style={{
         background: isTeamA
-          ? 'linear-gradient(135deg, #3f0000 0%, #1a1f3a 100%)'
-          : 'linear-gradient(135deg, #001a4d 0%, #1a1f3a 100%)',
+          ? 'linear-gradient(135deg, #3d1a00 0%, #111827 100%)'
+          : 'linear-gradient(135deg, #002a3d 0%, #111827 100%)',
       }}
     >
       {/* Header con degradado */}
       <div
         className={`
           px-2 sm:px-4 py-2 sm:py-3 rounded-lg text-center
-          ${isTeamA ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-blue-700 to-blue-800'}
+          ${isTeamA ? 'bg-gradient-to-r from-[#FF6B00] to-[#CC5500]' : 'bg-gradient-to-r from-[#00E5FF] to-[#00B8CC]'}
         `}
       >
         <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white break-words">
           {teamName}
         </h2>
-        {roundType && (
-          <p className="text-xs text-gray-200 mt-1">
-            {roundType} • Turno {roundOrder}
-          </p>
-        )}
-      </div>
-
-      {/* Etiqueta de tiempo */}
-      <div>
-        <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Tiempo</p>
       </div>
 
        {/* Temporizador digital */}
        <div
          className={`
-           text-center digital-timer transition-smooth
-           text-3xl sm:text-5xl md:text-6xl
+           text-center transition-smooth flex-1 flex items-center justify-center
+           text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-wider
            ${isActive ? (isTeamA ? 'text-white' : 'text-white') : 'text-gray-500'}
          `}
        >
@@ -83,7 +73,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         <div className="progress-bar-bg">
           <div
             className={`progress-bar-fill transition-smooth ${
-              isTeamA ? 'bg-red-500' : 'bg-blue-500'
+              isTeamA ? 'bg-[#FF6B00]' : 'bg-[#00E5FF]'
             }`}
             style={{ width: `${progress}%` }}
           />
@@ -95,7 +85,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         <div
           className={`
             text-center text-xs font-semibold py-2 rounded-lg
-            ${isTeamA ? 'bg-red-900/40 text-red-200' : 'bg-blue-900/40 text-blue-200'}
+            ${isTeamA ? 'bg-[#FF6B00]/20 text-[#FF6B00]' : 'bg-[#00E5FF]/20 text-[#00E5FF]'}
           `}
         >
           EN TURNO

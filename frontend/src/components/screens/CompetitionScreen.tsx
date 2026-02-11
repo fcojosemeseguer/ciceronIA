@@ -1,13 +1,13 @@
 /**
  * CompetitionScreen - Pantalla principal del debate
- * Responsiva: Desktop, Tablet, Mobile
+ * Estilo Aurora con colores naranja/cian
  */
 
 import React, { useEffect } from 'react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateTimer } from '../../hooks/useDebateTimer';
 import { useAutoAudioRecording } from '../../hooks/useAutoAudioRecording';
-import { TeamCard, CentralPanel, Controls } from '../common';
+import { TeamCard, CentralPanel } from '../common';
 import { Mic, MicOff } from 'lucide-react';
 
 interface CompetitionScreenProps {
@@ -47,9 +47,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
 
   const totalRounds = 8;
 
-  // Manejo de flujo
   const handlePlayPause = () => {
-    console.log('Play/Pause - Estado actual:', state);
     if (state === 'paused') {
       resumeDebate();
     } else if (state === 'running') {
@@ -60,22 +58,18 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
   };
 
   const handleNext = () => {
-    console.log('Turno B - Go to next Team B turn');
     goToNextTeamBTurn();
   };
 
   const handlePrevious = () => {
-    console.log('Turno A - Go to next Team A turn');
     goToNextTeamATurn();
   };
 
   const handleEndDebate = () => {
-    console.log('End Debate - Finalizing debate');
     finishDebate();
     onFinish?.();
   };
 
-  // Finalizar automáticamente en el último turno cuando el tiempo llega a 0
   useEffect(() => {
     if (timeRemaining === 0 && state === 'running' && currentRoundIndex === totalRounds - 1) {
       finishDebate();
@@ -83,33 +77,32 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     }
   }, [timeRemaining, state, currentRoundIndex, finishDebate, onFinish]);
 
-  // Finalizar manualmente
   useEffect(() => {
     if (state === 'finished') {
       onFinish?.();
     }
   }, [state, onFinish]);
 
-  // Don't auto-start - user must click Play button
-  // Timer starts paused in 'setup' state until user clicks Play
-
   return (
-    <div className="cinema-background w-full h-screen overflow-hidden flex flex-col">
-      <div className="relative z-10 w-full h-full flex flex-col">
-        {/* Encabezado con tema - Responsive */}
-        <div className="flex-shrink-0 border-b-2 border-gray-700/50 p-2 sm:p-3 md:p-4 text-center">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white opacity-90 line-clamp-2 sm:line-clamp-1">
-            {config.debateTopic}
-          </h1>
-          {state === 'finished' && (
-            <p className="text-red-400 font-bold mt-1 text-sm md:text-lg">DEBATE FINALIZADO</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        {/* Recording indicators - moved to top right */}
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          {isRecording && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF6B00]/20 border border-[#FF6B00]/30">
+              <Mic className="w-4 h-4 text-[#FF6B00] animate-pulse" />
+              <span className="text-[#FF6B00] text-sm font-medium hidden sm:block">Grabando</span>
+            </div>
+          )}
+          {audioError && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30">
+              <MicOff className="w-4 h-4 text-yellow-400" />
+            </div>
           )}
         </div>
 
-        {/* Contenedor principal - Responsivo */}
-        {/* Mobile: Stack vertical, Tablet/Desktop: 3 columnas */}
-        <div className="flex-1 flex flex-col md:flex-row gap-2 sm:gap-4 md:gap-6 p-2 sm:p-3 md:p-6 overflow-auto md:overflow-hidden">
-          {/* Equipo A - Izquierda */}
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col md:flex-row gap-2 p-2 sm:p-3 pt-4 pb-32 overflow-auto">
+          {/* Team A - Naranja */}
           <TeamCard
             teamId="A"
             teamName={teamAName}
@@ -120,7 +113,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
             roundOrder={currentRound?.order}
           />
 
-          {/* Panel Central */}
+          {/* Central Panel */}
           <CentralPanel
             debateTopic={config.debateTopic}
             currentRoundType={currentRound?.roundType}
@@ -133,9 +126,18 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
             }
             roundNumber={currentRoundIndex + 1}
             totalRounds={totalRounds}
+            isRunning={isTimerRunning}
+            onPlayPause={handlePlayPause}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onEndDebate={handleEndDebate}
+            hasNextTeamATurn={canNavigateToTeamATurn()}
+            hasNextTeamBTurn={canNavigateToTeamBTurn()}
+            isLastRound={isLastRound()}
+            debateState={state}
           />
 
-          {/* Equipo B - Derecha */}
+          {/* Team B - Cian */}
           <TeamCard
             teamId="B"
             teamName={teamBName}
@@ -145,63 +147,28 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
             roundType={currentRound?.roundType}
             roundOrder={currentRound?.order}
           />
-        </div>
+        </main>
 
-        {/* Panel de controles - Inferior - Responsivo */}
-        <div className="flex-shrink-0 border-t-2 border-gray-700/50 p-2 sm:p-3 md:p-6 bg-dark-card/50 overflow-auto">
-          {/* Indicador de grabación */}
-          <div className="flex justify-center items-center gap-1 sm:gap-2 mb-2 sm:mb-4 flex-wrap">
-            {isRecording && (
-              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 rounded-lg bg-red-900/40 border border-red-600">
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <Mic size={14} className="sm:w-4 sm:h-4 text-red-400 animate-pulse" />
-                  <span className="text-red-300 text-xs sm:text-sm font-semibold">Grabando...</span>
-                </div>
+        {/* Footer - Solo estado y ronda */}
+        <footer className="backdrop-blur-xl bg-black/40 border-t border-white/10 p-3 sm:p-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-white/50 gap-2">
+              <div>
+                Estado:{' '}
+                <span className="text-white font-semibold">
+                  {state === 'setup'
+                    ? 'CONFIGURACIÓN'
+                    : state === 'running'
+                      ? '► EN DIRECTO'
+                      : state === 'paused'
+                        ? '⏸ PAUSADO'
+                        : '✓ FINALIZADO'}
+                </span>
               </div>
-            )}
-            {audioError && (
-              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 rounded-lg bg-yellow-900/40 border border-yellow-600">
-                <MicOff size={14} className="sm:w-4 sm:h-4 text-yellow-400" />
-                <span className="text-yellow-300 text-xs">Error: {audioError}</span>
-              </div>
-            )}
-          </div>
-
-           {/* Controles de navegación */}
-           <Controls
-             isRunning={isTimerRunning}
-             onPlayPause={handlePlayPause}
-             onPrevious={handlePrevious}
-             onNext={handleNext}
-             onEndDebate={handleEndDebate}
-             canGoNext={canGoToNextRound()}
-             canGoPrevious={canGoToPreviousRound()}
-             hasNextTeamATurn={canNavigateToTeamATurn()}
-             hasNextTeamBTurn={canNavigateToTeamBTurn()}
-             isLastRound={isLastRound()}
-             nextTeam={currentTeam === 'A' ? 'B' : 'A'}
-             debateState={state}
-             currentTeam={currentTeam}
-           />
-
-          {/* Estado general - Responsive */}
-          <div className="flex flex-col sm:flex-row justify-between items-center mt-2 sm:mt-4 md:mt-6 text-xs md:text-sm text-gray-400 gap-1 sm:gap-2">
-            <div className="text-center sm:text-left">
-              Estado:{' '}
-              <span className="text-white font-semibold">
-                {state === 'setup'
-                  ? 'CONFIGURACIÓN'
-                  : state === 'running'
-                    ? '► EN DIRECTO'
-                    : state === 'paused'
-                      ? '⏸ PAUSADO'
-                      : '✓ FINALIZADO'}
-              </span>
+              <div>Ronda {currentRoundIndex + 1} de 8</div>
             </div>
-            <div>Ronda {currentRoundIndex + 1} de 8</div>
           </div>
-        </div>
-      </div>
+        </footer>
     </div>
   );
 };

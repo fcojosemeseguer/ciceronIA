@@ -310,6 +310,12 @@ export const useDebateStore = create<DebateStore>()(
       const state = get();
       const nextRounds = generateDebateRounds(state.config);
       
+      // Special case: Block Team A navigation from Round 6 (prevent 6→8 skip)
+      // Round 6 is index 5, and we want to force going through Round 7 first
+      if (state.currentRoundIndex === 5) {
+        return false; // Block Turno A at Round 6
+      }
+      
       // Search for next Team A turn
       for (let i = state.currentRoundIndex + 1; i < nextRounds.length; i++) {
         if (nextRounds[i].team === 'A') {

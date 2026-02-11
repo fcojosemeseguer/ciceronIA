@@ -1,47 +1,39 @@
 /**
- * Componente Controls - Controles inferiores (Play/Pause, Previous/Next)
- * Responsivo: Desktop, Tablet, Mobile
+ * Componente ControlButtons - Botones de control (Turno A, Play/Pause, Turno B)
+ * Separado del footer para mejor distribución del espacio
  */
 
 import React from 'react';
 import { Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TeamPosition } from '../../types';
 
-interface ControlsProps {
+interface ControlButtonsProps {
   isRunning: boolean;
   onPlayPause: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onEndDebate?: () => void;
-  canGoNext: boolean;
-  canGoPrevious: boolean;
   hasNextTeamATurn: boolean;
   hasNextTeamBTurn: boolean;
   isLastRound: boolean;
-  nextTeam: TeamPosition | null;
   debateState: 'setup' | 'paused' | 'running' | 'finished';
-  currentTeam: TeamPosition;
 }
 
-export const Controls: React.FC<ControlsProps> = ({
+export const ControlButtons: React.FC<ControlButtonsProps> = ({
   isRunning,
   onPlayPause,
   onPrevious,
   onNext,
   onEndDebate,
-  canGoNext,
-  canGoPrevious,
   hasNextTeamATurn,
   hasNextTeamBTurn,
   isLastRound,
-  nextTeam,
   debateState,
-  currentTeam,
 }) => {
   const isFinished = debateState === 'finished';
 
   return (
-    <div className="flex flex-col sm:flex-row justify-center items-center gap-1 sm:gap-2 md:gap-4 flex-wrap -mt-8">
+    <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 md:gap-6 flex-wrap">
       {/* Only show Turno A if there's a next Team A turn */}
       {!isLastRound && (
         <button
