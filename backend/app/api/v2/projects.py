@@ -1,8 +1,9 @@
 from app.api.v2.models import ProjectModel
-from app.core.database import create_analysis, create_project, check_team, save_audio_path, check_user_existence, get_audio_path, save_transcription, get_transcription, save_metrics, get_postura, get_orador, get_saved_transcription_diarization, get_saved_metrics
+from app.core.database import create_analysis, create_project, check_team, get_stats, save_audio_path, check_user_existence, get_audio_path, save_transcription, get_transcription, save_metrics, get_postura, get_orador, get_saved_transcription_diarization, get_saved_metrics, create_team, get_audio_paths
 from app.processors.pipeline import DebateFase, Postura, create_chat
 from app.services.transcription import split_audio
 from app.services.metrics import process_complete_analysis
+from app.services.helpers import del_audios
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Depends, Form
 import os
@@ -21,7 +22,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 UPLOAD_DIR = Path("uploads/audios")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-router = APIRouter()
+projects_router = APIRouter()
 
 fases = {
     "Introducción": DebateFase.INTRO,
@@ -50,7 +51,7 @@ key_metrics_names = [
 chats = {}
 
 
-@router.post("/projects")
+@projects_router.post("/projects")
 async def create_project(data: ProjectModel):
     try:
         dec_jwt = jwt.decode(data.jwt, SECRET_KEY, ALGORITHM)
@@ -63,7 +64,7 @@ async def create_project(data: ProjectModel):
         raise HTTPException(500, e)
 
 
-@router.post("/projects/{project_code}/audio")
+@projects_router.post("/projects/{project_code}/audio")
 async def upload_audio(
         project_code: str,
         file: UploadFile,
@@ -97,8 +98,8 @@ async def upload_audio(
         raise HTTPException(500, e)
 
 
-@router.get("/projects/{project_code}/transcription")
-async def get_transcription(
+@projects_router.get("/projects/{project_code}/transcription")
+async def get_transcript(
         project_code: str,
         enc_jwt: str,
         fase: str,
@@ -126,7 +127,7 @@ async def get_transcription(
         HTTPException(500, e)
 
 
-@router.get("/projects/{project_code}/prosody")
+@projects_router.get("/projects/{project_code}/prosody")
 async def get_prosody(
         project_code: str,
         enc_jwt: str,
@@ -150,7 +151,7 @@ async def get_prosody(
         HTTPException(500, e)
 
 
-@router.get("/projects/{project_code}/interepretation")
+@projects_router.get("/projects/{project_code}/interepretation")
 async def get_interpretation(
         project_code: str,
         enc_jwt: str,
@@ -229,3 +230,51 @@ async def get_interpretation(
 
     except Exception as e:
         HTTPException(500, e)
+
+
+@projects_router.post("/projects/{project_code}/teams")
+async def create_team(
+        project_code: str,
+        enc_jwt: str,
+        name: str,
+        desc: str,
+        team: str,
+        postura: str):
+    try:
+        dec_jwt = jwt.decode(enc_jwt, SECRET_KEY, ALGORITHM)
+        if not check_user_existence(dec_jwt["user_code"]):
+            raise HTTPException(401, "invalid jwt")
+        create_team(name, desc, postura, team, project_code)
+        return {"message": "team created succesfully"}
+    except Exception as e:
+        raise HTTPException(500, e)
+
+
+@projects_router.get("/projects/{project_code}/stats")
+async def get_statistics(
+        project_code: str,
+        enc_jwt: str):
+    try:
+        dec_jwt = jwt.decode(enc_jwt, SECRET_KEY, ALGORITHM)
+        if not check_user_existence(dec_jwt["user_code"]):
+            raise HTTPException(401, "invalid jwt")
+
+        return {"stats": get_stats(project_code)}
+    except Exception as e:
+        raise HTTPException(500, e)
+
+
+@projects_router.delete("/projects/{project_code}/del_audios")
+async def del_audios(
+        project_code: str,
+        enc_jwt: str):
+    try:
+        dec_jwt = jwt.decode(enc_jwt, SECRET_KEY, ALGORITHM)
+        if not check_user_existence(dec_jwt["user_code"]):
+            raise HTTPException(401, "invalid jwt")
+
+        file_paths = get_audio_paths(project_code)
+        del_audios(file_paths)
+        return {"message": "audios deleted succesfully!"}
+    except Exception as e:
+        raise HTTPException(500, e)
