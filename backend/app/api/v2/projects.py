@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import shutil
 
-load_dotenv
+load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -151,7 +151,7 @@ async def get_prosody(
         HTTPException(500, e)
 
 
-@projects_router.get("/projects/{project_code}/interepretation")
+@projects_router.get("/projects/{project_code}/interpretation")
 async def get_interpretation(
         project_code: str,
         enc_jwt: str,

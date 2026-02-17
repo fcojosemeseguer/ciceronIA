@@ -220,4 +220,4 @@ async def getproject(data: AuthDataProject):
         return {"message": f"here is project {data.project_code}", "content": result}
     except Exception as e:
         print(f"error {e}")
-        HTTPException(500, f"error {e}")
+        raise HTTPException(500, f"error {e}")
