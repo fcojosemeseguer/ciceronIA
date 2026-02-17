@@ -64,12 +64,14 @@ def create_project(data: dict):
         name = data["name"]
         desc = data["desc"]
         user_code = data["user_code"]
+        debate_type = data.get("debate_type", "upct")
         project_code = str(uuid4())
         result = projects_table.insert({
             'name': name,
             'desc': desc,
             'user_code': user_code,
-            'code': project_code
+            'code': project_code,
+            'debate_type': debate_type
         })
         return project_code if project_code else None
     except Exception as e:
@@ -86,6 +88,7 @@ def create_analysis(data: dict) -> bool:
         criterios = data["criterios"]
         total = data["total"]
         max_total = data["max_total"]
+        debate_type = data.get("debate_type", "upct")
         result = analysis_table.insert({
             "project_code": project_code,
             "fase": fase,
@@ -93,7 +96,8 @@ def create_analysis(data: dict) -> bool:
             "orador": orador,
             "criterios": criterios,
             "total": total,
-            "max_total": max_total
+            "max_total": max_total,
+            "debate_type": debate_type
         })
         return True
     except Exception as e:
@@ -127,6 +131,26 @@ def get_project(data: dict):
     except Exception as e:
         print(f"error {e}")
         return None
+
+
+def get_project_debate_type(project_code: str) -> str:
+    """
+    Obtiene el tipo de debate de un proyecto.
+    
+    Args:
+        project_code: Código del proyecto
+    
+    Returns:
+        ID del tipo de debate (ej: "upct", "retor"). Default "upct" si no está definido.
+    """
+    try:
+        project = projects_table.get(User.code == project_code)
+        if project:
+            return project.get("debate_type", "upct")
+        return "upct"
+    except Exception as e:
+        print(f"error getting debate type: {e}")
+        return "upct"
 
 
 def check_team(project_code, team) -> bool:

@@ -11,11 +11,17 @@ from dotenv import load_dotenv
 
 from app.services.ai_engine import TinyDBChatMessageHistory
 from data.prompts.prompts import system_prompt_evaluation
+from data.debate_types.base import DebateTypeConfig
+from data.debate_types import get_debate_type, DEFAULT_DEBATE_TYPE
 
 load_dotenv()
 if not os.getenv("OPENAI_API_KEY"):
     raise ValueError("OpenAI key not found")
 
+
+# ---------------------------------------------------------------------------
+# Backward-compatible enums (used by UPCT flow and endpoints)
+# ---------------------------------------------------------------------------
 
 class DebateFase(str, Enum):
     """Fases válidas de un debate según normativa UPCT."""
@@ -32,6 +38,7 @@ class Postura(str, Enum):
     CONTRA = "En Contra"
 
 
+# Backward-compatible dict (still used by legacy UPCT callers)
 CRITERIOS_POR_FASE = {
     DebateFase.INTRO: [
         "introduccion_llamativa",
@@ -101,10 +108,14 @@ KEY_METRICS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Pydantic output models
+# ---------------------------------------------------------------------------
+
 class EvaluationResult(BaseModel):
-    """Resultado estructurado de una evaluación de debate."""
+    """Resultado estructurado de una evaluación de debate (genérico)."""
     puntuaciones: dict[str, int] = Field(
-        description="Diccionario con criterio como clave y puntuación (0-4) como valor"
+        description="Diccionario con criterio como clave y puntuación como valor"
     )
     anotaciones: dict[str, str] = Field(
         description="Diccionario con criterio como clave y sugerencia breve de mejora como valor"
@@ -112,10 +123,11 @@ class EvaluationResult(BaseModel):
     fase: str = Field(description="Fase del debate evaluada")
     postura: str = Field(description="Postura del equipo: A Favor o En Contra")
     orador: str = Field(description="Identificador del orador evaluado")
+    debate_type: str = Field(default="upct", description="Tipo de debate")
 
 
 class EvaluationOutput(BaseModel):
-    """Modelo para parsear la respuesta del LLM."""
+    """Modelo para parsear la respuesta del LLM - evaluación UPCT por orador."""
     puntuaciones: dict[str, int] = Field(
         description="Puntuaciones por criterio (0-4). Las claves deben coincidir con los criterios de la fase."
     )
@@ -128,7 +140,7 @@ class EvaluationOutput(BaseModel):
 
 
 class FinalEvaluationOutput(BaseModel):
-    """Modelo para parsear la respuesta del LLM en fase Final."""
+    """Modelo para parsear la respuesta del LLM en fase Final (UPCT)."""
     puntuaciones: dict[str, int] = Field(
         description="Incluye sumatorio_oradores, estructuracion_conexion_equipo"
     )
@@ -146,30 +158,62 @@ class FinalEvaluationOutput(BaseModel):
     )
 
 
+class RetorEvaluationOutput(BaseModel):
+    """Modelo para parsear la respuesta del LLM - evaluación RETOR por equipo."""
+    puntuaciones: dict[str, int] = Field(
+        description="Puntuaciones por bloque (1-5). Claves: comprension_mocion, relevancia_informacion, "
+                    "argumentacion_refutacion, oratoria_persuasion, trabajo_equipo."
+    )
+    anotaciones: dict[str, str] = Field(
+        description="Breve anotación orientativa (máx 20 palabras) por cada bloque. Mismas claves que puntuaciones."
+    )
+    feedback: str = Field(
+        description="Feedback constructivo general para el equipo en esta fase (2-3 frases)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# ChatSession - now config-driven
+# ---------------------------------------------------------------------------
+
 class ChatSession:
     """
     Sesión de chat para evaluar debates.
 
     Mantiene el historial de conversación y permite enviar evaluaciones
-    estructuradas al LLM juez de debate.
+    estructuradas al LLM juez de debate. Soporta múltiples tipos de debate
+    a través de DebateTypeConfig.
     """
 
-    def __init__(self, project_id: str, session_id: str, db_path: str = "db.json"):
+    def __init__(
+        self,
+        project_id: str,
+        session_id: str,
+        db_path: str = "db.json",
+        debate_type_config: Optional[DebateTypeConfig] = None,
+    ):
         self.project_id = project_id
         self.session_id = session_id
         self.db_path = db_path
+
+        # Si no se pasa config, usar UPCT por defecto (retrocompatibilidad)
+        if debate_type_config is not None:
+            self.config = debate_type_config
+        else:
+            self.config = get_debate_type(DEFAULT_DEBATE_TYPE)
+
         self._history = TinyDBChatMessageHistory(
             session_id, project_id, db_path)
         self._chain = self._setup_chain()
         self._chain_with_history = self._setup_chain_with_history()
 
     def _setup_chain(self):
-        """Configura el chain de LangChain."""
+        """Configura el chain de LangChain con el system prompt del tipo de debate."""
         # llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", temperature=0)
         llm = ChatOpenAI(model="gpt-5-2025-08-07", temperature=0)
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt_evaluation),
+            ("system", self.config.system_prompt),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{input}"),
         ])
@@ -201,17 +245,8 @@ class ChatSession:
         """Formatea las métricas para el prompt, filtrando solo las clave."""
         lines = []
 
-        # Si se especifica un orador, usar solo sus métricas
-        if orador_id and orador_id in metricas:
-            speaker_metrics = metricas[orador_id]
-            lines.append(f"Métricas de {orador_id}:")
-            for metric_name in KEY_METRICS:
-                value = speaker_metrics.get(metric_name, "N/A")
-                if isinstance(value, float):
-                    value = f"{value:.4f}"
-                lines.append(f"  - {metric_name}: {value}")
-        else:
-            # Mostrar métricas de todos los speakers
+        if self.config.evaluation_mode == "per_team":
+            # En modo equipo, mostrar métricas de todos los speakers del equipo
             for speaker, speaker_metrics in metricas.items():
                 lines.append(f"Métricas de {speaker}:")
                 for metric_name in KEY_METRICS:
@@ -220,43 +255,90 @@ class ChatSession:
                         value = f"{value:.4f}"
                     lines.append(f"  - {metric_name}: {value}")
                 lines.append("")
+        else:
+            # Modo per_speaker: si se especifica un orador, usar solo sus métricas
+            if orador_id and orador_id in metricas:
+                speaker_metrics = metricas[orador_id]
+                lines.append(f"Métricas de {orador_id}:")
+                for metric_name in KEY_METRICS:
+                    value = speaker_metrics.get(metric_name, "N/A")
+                    if isinstance(value, float):
+                        value = f"{value:.4f}"
+                    lines.append(f"  - {metric_name}: {value}")
+            else:
+                # Mostrar métricas de todos los speakers
+                for speaker, speaker_metrics in metricas.items():
+                    lines.append(f"Métricas de {speaker}:")
+                    for metric_name in KEY_METRICS:
+                        value = speaker_metrics.get(metric_name, "N/A")
+                        if isinstance(value, float):
+                            value = f"{value:.4f}"
+                        lines.append(f"  - {metric_name}: {value}")
+                    lines.append("")
 
         return "\n".join(lines)
 
-    def _get_parser_for_fase(self, fase: DebateFase) -> PydanticOutputParser:
-        """Retorna el parser adecuado según la fase."""
-        if fase == DebateFase.FINAL:
+    def _get_parser(self, fase_id: str) -> PydanticOutputParser:
+        """Retorna el parser adecuado según el tipo de debate y la fase."""
+        if self.config.id == "retor":
+            return PydanticOutputParser(pydantic_object=RetorEvaluationOutput)
+
+        # UPCT: fase Final tiene modelo distinto
+        if self.config.has_final_phase and fase_id == self.config.final_phase_id:
             return PydanticOutputParser(pydantic_object=FinalEvaluationOutput)
         return PydanticOutputParser(pydantic_object=EvaluationOutput)
 
     def _build_evaluation_prompt(
         self,
-        fase: DebateFase,
-        postura: Postura,
+        fase_id: str,
+        fase_nombre: str,
+        postura: str,
         orador: str,
         transcripcion: list[dict],
         metricas: dict,
         duracion_segundos: Optional[float] = None
     ) -> str:
-        """Construye el prompt de evaluación formateado."""
-        parser = self._get_parser_for_fase(fase)
-        criterios = CRITERIOS_POR_FASE[fase]
+        """Construye el prompt de evaluación formateado según la config del debate."""
+        parser = self._get_parser(fase_id)
+        criterios = self.config.get_criterios_for_fase(fase_id)
 
-        prompt_parts = [
-            f"FASE: {fase.value}",
-            f"EQUIPO: {postura.value}",
-            f"ORADOR: {orador}",
-            "",
-            f"CRITERIOS A EVALUAR PARA ESTA FASE:",
-            "\n".join(f"- {c}" for c in criterios),
-            "",
-        ]
+        # Cabecera adaptada al modo de evaluación
+        if self.config.evaluation_mode == "per_team":
+            prompt_parts = [
+                f"FASE: {fase_nombre}",
+                f"EQUIPO: {postura}",
+                "",
+                "BLOQUES A EVALUAR:",
+            ]
+            # Incluir sub-items orientativos para RETOR
+            for criterio_id in criterios:
+                criterio_cfg = self.config.get_criterio_config(criterio_id)
+                if criterio_cfg:
+                    prompt_parts.append(f"- {criterio_cfg.nombre} ({criterio_id})")
+                    for sub in criterio_cfg.sub_items:
+                        prompt_parts.append(f"    * {sub}")
+                else:
+                    prompt_parts.append(f"- {criterio_id}")
+            prompt_parts.append("")
+        else:
+            prompt_parts = [
+                f"FASE: {fase_nombre}",
+                f"EQUIPO: {postura}",
+                f"ORADOR: {orador}",
+                "",
+                "CRITERIOS A EVALUAR PARA ESTA FASE:",
+                "\n".join(f"- {c}" for c in criterios),
+                "",
+            ]
 
+        # Duración
         if duracion_segundos is not None:
-            prompt_parts.extend([
-                f"DURACIÓN DE LA INTERVENCIÓN: {duracion_segundos:.2f} segundos",
-                ""
-            ])
+            fase_cfg = self.config.get_fase_by_id(fase_id)
+            tiempo_esperado = fase_cfg.tiempo_segundos if fase_cfg else 0
+            prompt_parts.append(f"DURACIÓN DE LA INTERVENCIÓN: {duracion_segundos:.2f} segundos")
+            if tiempo_esperado > 0:
+                prompt_parts.append(f"TIEMPO ASIGNADO A ESTA FASE: {tiempo_esperado} segundos")
+            prompt_parts.append("")
 
         prompt_parts.extend([
             "TRANSCRIPCIÓN:",
@@ -271,10 +353,13 @@ class ChatSession:
 
         return "\n".join(prompt_parts)
 
+    # ------------------------------------------------------------------
+    # Backward-compatible send_evaluation (accepts DebateFase/Postura enums)
+    # ------------------------------------------------------------------
     def send_evaluation(
         self,
-        fase: DebateFase,
-        postura: Postura,
+        fase,  # DebateFase enum or str
+        postura,  # Postura enum or str
         orador: str,
         transcripcion: list[dict],
         metricas: dict,
@@ -284,9 +369,9 @@ class ChatSession:
         Envía una evaluación al LLM y retorna el resultado estructurado.
 
         Args:
-            fase: Fase del debate (INTRO, REF1, REF2, CONCLUSION, FINAL)
-            postura: Postura del equipo (FAVOR o CONTRA)
-            orador: Identificador del orador
+            fase: Fase del debate (DebateFase enum para UPCT, o str fase_nombre para genérico)
+            postura: Postura del equipo (Postura enum o str)
+            orador: Identificador del orador (o descripción del equipo en RETOR)
             transcripcion: Lista de segmentos con speaker, text, start, end
             metricas: Dict de métricas por speaker
             duracion_segundos: Duración total de la intervención (opcional)
@@ -294,9 +379,24 @@ class ChatSession:
         Returns:
             EvaluationResult con las puntuaciones estructuradas
         """
+        # Normalizar fase a (fase_id, fase_nombre)
+        fase_nombre = fase.value if isinstance(fase, Enum) else str(fase)
+        fase_config = self.config.get_fase_by_nombre(fase_nombre)
+        if fase_config:
+            fase_id = fase_config.id
+        else:
+            # Intentar buscar por id directamente
+            fase_config = self.config.get_fase_by_id(fase_nombre)
+            fase_id = fase_config.id if fase_config else fase_nombre
+            fase_nombre = fase_config.nombre if fase_config else fase_nombre
+
+        # Normalizar postura
+        postura_str = postura.value if isinstance(postura, Enum) else str(postura)
+
         # Construir el prompt
         user_message = self._build_evaluation_prompt(
-            fase, postura, orador, transcripcion, metricas, duracion_segundos
+            fase_id, fase_nombre, postura_str, orador,
+            transcripcion, metricas, duracion_segundos
         )
 
         # Invocar el chain con historial
@@ -306,7 +406,7 @@ class ChatSession:
         )
 
         # Parsear la respuesta
-        parser = self._get_parser_for_fase(fase)
+        parser = self._get_parser(fase_id)
         parsed_output = parser.parse(response.content)
 
         # Construir el resultado
@@ -314,9 +414,10 @@ class ChatSession:
         return EvaluationResult(
             puntuaciones=parsed_output.puntuaciones,
             anotaciones=anotaciones,
-            fase=fase.value,
-            postura=postura.value,
-            orador=orador
+            fase=fase_nombre,
+            postura=postura_str,
+            orador=orador,
+            debate_type=self.config.id,
         )
 
     def send_message(self, message: str) -> str:
@@ -358,7 +459,12 @@ class ChatSession:
         self._history.clear()
 
 
-def create_chat(project_id: str, session_id: str, db_path: str = "db.json") -> ChatSession:
+def create_chat(
+    project_id: str,
+    session_id: str,
+    db_path: str = "db.json",
+    debate_type_config: Optional[DebateTypeConfig] = None,
+) -> ChatSession:
     """
     Crea una nueva sesión de chat para evaluación de debates.
 
@@ -366,32 +472,32 @@ def create_chat(project_id: str, session_id: str, db_path: str = "db.json") -> C
         project_id: Identificador del proyecto/debate
         session_id: Identificador de la sesión de evaluación
         db_path: Ruta al archivo de base de datos TinyDB
+        debate_type_config: Configuración del tipo de debate (None = UPCT por defecto)
 
     Returns:
         ChatSession configurada y lista para usar
 
     Example:
+        >>> # UPCT (retrocompatible, sin config)
         >>> chat = create_chat("debate_001", "eval_session_1")
-        >>> 
-        >>> # Evaluar introducción del equipo A Favor
         >>> result = chat.send_evaluation(
         ...     fase=DebateFase.INTRO,
         ...     postura=Postura.FAVOR,
         ...     orador="Orador 1",
         ...     transcripcion=[{"speaker": "SPEAKER_00", "text": "...", "start": 0, "end": 10}],
-        ...     metricas={"SPEAKER_00": {"loudness_sma3_amean": 0.5, ...}}
+        ...     metricas={"SPEAKER_00": {"loudness_sma3_amean": 0.5}}
         ... )
-        >>> 
-        >>> # Evaluar introducción del equipo En Contra
+        >>>
+        >>> # RETOR (con config explícita)
+        >>> from data.debate_types import get_debate_type
+        >>> retor_config = get_debate_type("retor")
+        >>> chat = create_chat("debate_002", "eval_session_2", debate_type_config=retor_config)
         >>> result = chat.send_evaluation(
-        ...     fase=DebateFase.INTRO,
-        ...     postura=Postura.CONTRA,
-        ...     orador="Orador 2",
+        ...     fase="Contextualizacion",
+        ...     postura="A Favor",
+        ...     orador="Equipo A",
         ...     transcripcion=[...],
         ...     metricas={...}
         ... )
-        >>> 
-        >>> print(result.puntuaciones)
-        >>> print(result.postura)  # "En Contra"
     """
-    return ChatSession(project_id, session_id, db_path)
+    return ChatSession(project_id, session_id, db_path, debate_type_config)

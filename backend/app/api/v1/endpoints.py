@@ -1,7 +1,11 @@
-from app.core.database import create_user, check_user, get_user_code, create_project, create_analysis, get_projects, get_project
-from app.api.v1.models import CredsInput, NewProjectInfo, AnalyseData, AuthData, AuthDataProject
+from app.core.database import (
+    create_user, check_user, get_user_code, create_project,
+    create_analysis, get_projects, get_project, get_project_debate_type,
+)
+from app.api.v1.models import CredsInput, NewProjectInfo, AnalyseData, QuickAnalyseData, AuthData, AuthDataProject
 from app.processors.pipeline import create_chat, DebateFase, Postura
 from app.services.metrics import process_complete_analysis
+from data.debate_types import get_debate_type, list_debate_types, DEFAULT_DEBATE_TYPE
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, status, Depends
 import os
@@ -23,7 +27,8 @@ router = APIRouter()
 
 chats = {}
 
-fases = {
+# Backward-compatible maps for UPCT (used as fallback)
+_upct_fases = {
     "Introducción": DebateFase.INTRO,
     "Refutación 1": DebateFase.REF1,
     "Refutación 2": DebateFase.REF2,
@@ -31,7 +36,7 @@ fases = {
     "Final": DebateFase.FINAL
 }
 
-posturas = {
+_upct_posturas = {
     "A Favor": Postura.FAVOR,
     "En Contra": Postura.CONTRA
 }
@@ -51,6 +56,12 @@ key_metrics_names = [
 @router.post("/status")
 async def status():
     return {"message": "ciceron is running"}
+
+
+@router.get("/debate-types")
+async def get_debate_types():
+    """Lista todos los tipos de debate disponibles con info resumida."""
+    return {"debate_types": list_debate_types()}
 
 
 @router.post("/login")
@@ -104,10 +115,27 @@ async def newproject(data: NewProjectInfo):
     try:
         payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
         user_code = payload["user_code"]
-        project_code = create_project(
-            {"name": data.name, "desc": data.description, "user_code": user_code})
+
+        # Validar que el tipo de debate existe
+        try:
+            get_debate_type(data.debate_type)
+        except ValueError as e:
+            raise HTTPException(400, detail=str(e))
+
+        project_code = create_project({
+            "name": data.name,
+            "desc": data.description,
+            "user_code": user_code,
+            "debate_type": data.debate_type,
+        })
         if project_code is not None:
-            return {"message": "project created", "project_code": project_code}
+            return {
+                "message": "project created",
+                "project_code": project_code,
+                "debate_type": data.debate_type,
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, detail=str(e))
 
@@ -117,27 +145,51 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
     file_path = None
     try:
         project_code = data.project_code
-        data.fase
-        data.postura
-        file_name = f"{abs(hash(f'{project_code}-{data.fase}-{data.postura}'))}.wav"
-        file_path = UPLOAD_DIR / file_name
 
-        if data.fase not in ["Introducción", "Refutación 1", "Refutación 2", "Conclusión", "Final"]:
-            raise ValueError(f"{data.fase} is not a valid phase")
-        if data.postura not in ["A Favor", "En Contra"]:
-            raise ValueError(f"{data.postura} is not valid")
+        # Obtener tipo de debate del proyecto
+        debate_type_id = get_project_debate_type(project_code)
+        try:
+            debate_config = get_debate_type(debate_type_id)
+        except ValueError:
+            raise HTTPException(400, detail=f"Project has invalid debate type: {debate_type_id}")
 
-        fase = fases[data.fase]
-        postura = posturas[data.postura]
+        # Validar fase contra la config del tipo de debate
+        fase_nombre = data.fase
+        fase_config = debate_config.get_fase_by_nombre(fase_nombre)
+        if fase_config is None:
+            # Intentar buscar por id
+            fase_config = debate_config.get_fase_by_id(fase_nombre)
+        if fase_config is None:
+            fases_validas = [f.nombre for f in debate_config.fases]
+            raise ValueError(
+                f"'{fase_nombre}' is not a valid phase for {debate_type_id}. "
+                f"Valid phases: {fases_validas}"
+            )
+
+        # Validar postura
+        postura_str = data.postura
+        if postura_str not in debate_config.get_posturas_validas():
+            raise ValueError(
+                f"'{postura_str}' is not valid. "
+                f"Valid options: {debate_config.get_posturas_validas()}"
+            )
+
         orador = data.orador
         num_speakers = data.num_speakers
+
+        file_name = f"{abs(hash(f'{project_code}-{data.fase}-{data.postura}'))}.wav"
+        file_path = UPLOAD_DIR / file_name
 
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(data.file.file, buffer)
         await data.file.close()
 
+        # Crear o recuperar ChatSession con la config del tipo de debate
         if chats.get(project_code) is None:
-            chat = create_chat(project_code, project_code)
+            chat = create_chat(
+                project_code, project_code,
+                debate_type_config=debate_config
+            )
             chats[project_code] = chat
         else:
             chat = chats[project_code]
@@ -153,9 +205,17 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
         else:
             duracion = None
 
+        # Para UPCT: pasar enums (retrocompatibilidad). Para otros: pasar strings.
+        if debate_type_id == "upct" and fase_nombre in _upct_fases:
+            fase_arg = _upct_fases[fase_nombre]
+            postura_arg = _upct_posturas[postura_str]
+        else:
+            fase_arg = fase_nombre
+            postura_arg = postura_str
+
         resultado = chat.send_evaluation(
-            fase=fase,
-            postura=postura,
+            fase=fase_arg,
+            postura=postura_arg,
             orador=orador,
             transcripcion=transcription,
             metricas=metrics,
@@ -172,14 +232,18 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
                 "anotacion": anotacion
             })
             total += nota
+
+        max_total = len(resultado.puntuaciones) * debate_config.escala_max
+
         if create_analysis({
             "fase": resultado.fase,
             "postura": resultado.postura,
             "orador": resultado.orador,
             "criterios": criterios,
             "total": total,
-            "max_total": len(resultado.puntuaciones) * 4,
-            "project_code": project_code
+            "max_total": max_total,
+            "project_code": project_code,
+            "debate_type": debate_type_id,
         }):
             return {
                 "message": "analysis succeeded!",
@@ -188,11 +252,132 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
                 "orador": resultado.orador,
                 "criterios": criterios,
                 "total": total,
-                "max_total": len(resultado.puntuaciones) * 4
+                "max_total": max_total,
+                "debate_type": debate_type_id,
             }
         else:
             raise RuntimeError("error while saving data")
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            500, detail=f"error while analysing {e}")
+    finally:
+        if file_path is not None and file_path.exists():
+            file_path.unlink()
+
+
+@router.post("/quick-analyse")
+async def quick_analyse(data: QuickAnalyseData = Depends(QuickAnalyseData.as_form)):
+    """
+    Análisis rápido sin proyecto asociado.
+    No requiere autenticación. No guarda resultados en BD.
+    El debate_type se pasa directamente en el request (default: upct).
+    """
+    file_path = None
+    try:
+        # Validar tipo de debate
+        debate_type_id = data.debate_type
+        try:
+            debate_config = get_debate_type(debate_type_id)
+        except ValueError as e:
+            raise HTTPException(400, detail=str(e))
+
+        # Validar fase
+        fase_nombre = data.fase
+        fase_config = debate_config.get_fase_by_nombre(fase_nombre)
+        if fase_config is None:
+            fase_config = debate_config.get_fase_by_id(fase_nombre)
+        if fase_config is None:
+            fases_validas = [f.nombre for f in debate_config.fases]
+            raise ValueError(
+                f"'{fase_nombre}' is not a valid phase for {debate_type_id}. "
+                f"Valid phases: {fases_validas}"
+            )
+
+        # Validar postura
+        postura_str = data.postura
+        if postura_str not in debate_config.get_posturas_validas():
+            raise ValueError(
+                f"'{postura_str}' is not valid. "
+                f"Valid options: {debate_config.get_posturas_validas()}"
+            )
+
+        orador = data.orador
+        num_speakers = data.num_speakers
+
+        file_name = f"quick_{abs(hash(f'{data.fase}-{data.postura}-{id(data)}'))}.wav"
+        file_path = UPLOAD_DIR / file_name
+
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(data.file.file, buffer)
+        await data.file.close()
+
+        # Crear ChatSession efímera (no se guarda en el dict chats)
+        temp_session_id = f"quick_{id(data)}"
+        chat = create_chat(
+            temp_session_id, temp_session_id,
+            debate_type_config=debate_config
+        )
+
+        analysis_data = process_complete_analysis(
+            str(file_path), num_speakers=num_speakers)
+
+        transcription = analysis_data["transcript"]
+        metrics = analysis_data["metrics"]
+
+        if transcription:
+            duracion = transcription[-1]["end"] - transcription[0]["start"]
+        else:
+            duracion = None
+
+        # Para UPCT: pasar enums. Para otros: strings.
+        if debate_type_id == "upct" and fase_nombre in _upct_fases:
+            fase_arg = _upct_fases[fase_nombre]
+            postura_arg = _upct_posturas[postura_str]
+        else:
+            fase_arg = fase_nombre
+            postura_arg = postura_str
+
+        resultado = chat.send_evaluation(
+            fase=fase_arg,
+            postura=postura_arg,
+            orador=orador,
+            transcripcion=transcription,
+            metricas=metrics,
+            duracion_segundos=duracion
+        )
+
+        criterios = []
+        total = 0
+        for criterio, nota in resultado.puntuaciones.items():
+            anotacion = resultado.anotaciones.get(criterio, "")
+            criterios.append({
+                "criterio": criterio,
+                "nota": nota,
+                "anotacion": anotacion
+            })
+            total += nota
+
+        max_total = len(resultado.puntuaciones) * debate_config.escala_max
+
+        # Limpiar historial efímero
+        chat.clear_history()
+
+        return {
+            "message": "quick analysis succeeded!",
+            "fase": resultado.fase,
+            "postura": resultado.postura,
+            "orador": resultado.orador,
+            "criterios": criterios,
+            "total": total,
+            "max_total": max_total,
+            "debate_type": debate_type_id,
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             500, detail=f"error while analysing {e}")

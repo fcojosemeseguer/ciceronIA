@@ -38,6 +38,7 @@ class NewProjectInfo(BaseModel):
     name: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=0, max_length=128)
     jwt: str = Field(...)
+    debate_type: str = Field(default="upct", min_length=1, max_length=32)
 
 
 class AnalyseData(BaseModel):
@@ -93,3 +94,47 @@ class AuthData(BaseModel):
 class AuthDataProject(BaseModel):
     jwt: str = Field(...)
     project_code: str = Field(...)
+
+
+class QuickAnalyseData(BaseModel):
+    """Datos para análisis rápido sin proyecto asociado."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    fase: str = Field(..., min_length=1, max_length=32)
+    postura: str = Field(..., min_length=1, max_length=16)
+    orador: str = Field(...)
+    num_speakers: int = Field(...)
+    debate_type: str = Field(default="upct", min_length=1, max_length=32)
+    file: UploadFile
+
+    @field_validator('file')
+    @classmethod
+    def validate_wav(cls, v: UploadFile) -> UploadFile:
+        if not v.filename.lower().endswith('.wav'):
+            raise ValueError('El archivo debe tener extensión .wav')
+
+        valid_mime_types = ['audio/wav', 'audio/x-wav', 'audio/wave']
+        if v.content_type not in valid_mime_types:
+            raise ValueError(
+                f'Tipo de archivo no permitido: {v.content_type}. Debe ser audio/wav.')
+
+        return v
+
+    @classmethod
+    def as_form(
+        cls,
+        fase: str = Form(...),
+        postura: str = Form(...),
+        orador: str = Form(...),
+        num_speakers: int = Form(...),
+        debate_type: str = Form(default="upct"),
+        file: UploadFile = File(...)
+    ) -> "QuickAnalyseData":
+        return cls(
+            fase=fase,
+            postura=postura,
+            orador=orador,
+            num_speakers=num_speakers,
+            debate_type=debate_type,
+            file=file
+        )
