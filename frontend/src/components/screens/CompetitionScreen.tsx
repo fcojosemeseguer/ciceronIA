@@ -70,12 +70,14 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     onFinish?.();
   };
 
-  useEffect(() => {
-    if (timeRemaining === 0 && state === 'running' && currentRoundIndex === totalRounds - 1) {
-      finishDebate();
-      onFinish?.();
-    }
-  }, [timeRemaining, state, currentRoundIndex, finishDebate, onFinish]);
+  // Eliminado: Ya no se finaliza automáticamente cuando el tiempo llega a 0
+  // El juez controla manualmente cuándo terminar el debate
+  // useEffect(() => {
+  //   if (timeRemaining === 0 && state === 'running' && currentRoundIndex === totalRounds - 1) {
+  //     finishDebate();
+  //     onFinish?.();
+  //   }
+  // }, [timeRemaining, state, currentRoundIndex, finishDebate, onFinish]);
 
   useEffect(() => {
     if (state === 'finished') {

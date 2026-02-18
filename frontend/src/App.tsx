@@ -16,13 +16,14 @@ import {
   AnalysisResultsScreen,
   DashboardScreen,
   DebateModeScreen,
+  SettingsScreen,
 } from './components/screens';
 import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
 import { DebateHistory, Project } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
-import { Home, ArrowLeft, UserCircle, Plus, AlertTriangle, Clock, LayoutDashboard, Settings } from 'lucide-react';
+import { Home, Plus, AlertTriangle, Clock, LayoutDashboard, Settings } from 'lucide-react';
 import './App.css';
 
 type AppScreen = 
@@ -36,7 +37,8 @@ type AppScreen =
   | 'analysis' 
   | 'analysis-results'
   | 'home' 
-  | 'debate-details';
+  | 'debate-details'
+  | 'settings';
 
 function App() {
   const { checkAuth, isAuthenticated, logout } = useAuthStore();
@@ -44,7 +46,27 @@ function App() {
   const { currentProject, selectProject, clearUploads } = useAnalysisStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
+  const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
+
+  // Función para navegar guardando historial
+  const navigateTo = (screen: AppScreen) => {
+    if (screen !== currentScreen) {
+      setScreenHistory(prev => [...prev, screen]);
+      setCurrentScreen(screen);
+    }
+  };
+
+  // Función para volver atrás
+  const goBack = () => {
+    if (screenHistory.length > 1) {
+      const newHistory = [...screenHistory];
+      newHistory.pop(); // Eliminar pantalla actual
+      const previousScreen = newHistory[newHistory.length - 1];
+      setScreenHistory(newHistory);
+      setCurrentScreen(previousScreen);
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -52,16 +74,16 @@ function App() {
   }, [checkAuth]);
 
   // Navegación básica
-  const handleGoToLanding = () => setCurrentScreen('landing');
-  const handleGoToDashboard = () => setCurrentScreen('dashboard');
+  const handleGoToLanding = () => navigateTo('landing');
+  const handleGoToDashboard = () => navigateTo('dashboard');
   
   // Auth
   const handleAuthenticated = () => {
     if (pendingRedirectAfterAuth) {
-      setCurrentScreen(pendingRedirectAfterAuth);
+      navigateTo(pendingRedirectAfterAuth);
       setPendingRedirectAfterAuth(null);
     } else {
-      setCurrentScreen('dashboard');
+      navigateTo('dashboard');
     }
   };
   
@@ -69,12 +91,12 @@ function App() {
     if (redirectTo) {
       setPendingRedirectAfterAuth(redirectTo);
     }
-    setCurrentScreen('auth');
+    navigateTo('auth');
   };
 
   // Dashboard flows
   const handleNewDebate = () => {
-    setCurrentScreen('debate-mode');
+    navigateTo('debate-mode');
   };
 
   const handleAnalyzeRecorded = () => {
@@ -82,16 +104,16 @@ function App() {
       handleGoToAuth('home');
       return;
     }
-    setCurrentScreen('home');
+    navigateTo('home');
   };
 
   const handleViewHistory = () => {
-    setCurrentScreen('home');
+    navigateTo('home');
   };
 
   // Debate Mode Selection
   const handleSelectLiveDebate = () => {
-    setCurrentScreen('setup');
+    navigateTo('setup');
   };
 
   const handleSelectRecordedDebate = () => {
@@ -99,48 +121,48 @@ function App() {
       handleGoToAuth('home');
       return;
     }
-    setCurrentScreen('home');
+    navigateTo('home');
   };
 
   // Analysis (ahora accesible desde Historial)
   const handleSelectProject = (project: Project) => {
     selectProject(project);
     clearUploads();
-    setCurrentScreen('analysis');
+    navigateTo('analysis');
   };
 
   const handleQuickAnalysis = () => {
     selectProject(null);
     clearUploads();
-    setCurrentScreen('analysis');
+    navigateTo('analysis');
   };
 
   const handleViewResults = () => {
-    setCurrentScreen('analysis-results');
+    navigateTo('analysis-results');
   };
 
   const handleBackFromAnalysis = () => {
     clearUploads();
-    setCurrentScreen('home');
+    navigateTo('home');
   };
 
   // Flujo legacy (mantener para compatibilidad)
   const handleStartDebateFromLanding = () => {
     if (isAuthenticated) {
-      setCurrentScreen('dashboard');
+      navigateTo('dashboard');
     } else {
       handleGoToAuth('dashboard');
     }
   };
-  
+
   const handleViewDebate = (debate: DebateHistory) => {
     selectDebate(debate);
-    setCurrentScreen('debate-details');
+    navigateTo('debate-details');
   };
 
   const handleBackToHome = () => {
     selectDebate(null);
-    setCurrentScreen('home');
+    navigateTo('home');
   };
 
   // Estados para confirmación de salida
@@ -160,9 +182,9 @@ function App() {
     setShowExitConfirm(false);
   };
 
-  const handleStartDebate = () => setCurrentScreen('competition');
-  const handleFinishDebate = () => setCurrentScreen('scoring');
-  const handleFinishScoring = () => setCurrentScreen('dashboard');
+  const handleStartDebate = () => navigateTo('competition');
+  const handleFinishDebate = () => navigateTo('scoring');
+  const handleFinishScoring = () => navigateTo('dashboard');
 
   const { state: debateState } = useDebateStore();
 
@@ -183,21 +205,21 @@ function App() {
   const getDockItems = () => {
     const items = [];
     
-    // Botón principal dinámico: Inicio cuando está en Dashboard, Panel en el resto
+    // Botón principal dinámico: Inicio/Panel con comportamiento toggle
     if (isAuthenticated) {
       if (currentScreen === 'dashboard') {
-        // En Dashboard: mostrar Inicio (va a Landing)
+        // En Dashboard: mostrar Inicio (si vuelves a pulsar, va atrás)
         items.push({
           icon: <Home className="w-6 h-6 text-white" />,
           label: 'Inicio',
-          onClick: () => handleNavigationWithConfirm(() => handleGoToLanding())
+          onClick: () => handleNavigationWithConfirm(() => goBack())
         });
       } else {
-        // En otras páginas: mostrar Panel (va a Dashboard)
+        // En otras páginas: mostrar Panel (si vuelves a pulsar, va atrás)
         items.push({
           icon: <LayoutDashboard className="w-6 h-6 text-white" />,
           label: 'Panel',
-          onClick: () => handleNavigationWithConfirm(() => handleGoToDashboard())
+          onClick: () => handleNavigationWithConfirm(() => goBack())
         });
       }
     } else {
@@ -205,7 +227,13 @@ function App() {
       items.push({
         icon: <Home className="w-6 h-6 text-white" />,
         label: 'Inicio',
-        onClick: () => handleNavigationWithConfirm(() => handleGoToLanding())
+        onClick: () => handleNavigationWithConfirm(() => {
+          if (currentScreen === 'landing') {
+            goBack();
+          } else {
+            handleGoToLanding();
+          }
+        })
       });
     }
 
@@ -223,37 +251,21 @@ function App() {
       items.push({
         icon: <Clock className="w-6 h-6 text-white" />,
         label: 'Historial',
-        onClick: () => setCurrentScreen('home')
+        onClick: () => navigateTo('home')
       });
     }
 
-    // Back - visible en todas las páginas EXCEPTO dashboard, home, landing y auth
-    if (currentScreen !== 'dashboard' && currentScreen !== 'home' && currentScreen !== 'landing' && currentScreen !== 'auth') {
-      items.push({
-        icon: <ArrowLeft className="w-6 h-6 text-white" />,
-        label: 'Volver',
-        onClick: () => {
-          handleNavigationWithConfirm(() => {
-            if (currentScreen === 'debate-mode') handleGoToDashboard();
-            else if (currentScreen === 'setup') handleGoToDashboard();
-            else if (currentScreen === 'competition') handleGoToDashboard();
-            else if (currentScreen === 'scoring') handleGoToDashboard();
-            else if (currentScreen === 'analysis') handleBackFromAnalysis();
-            else if (currentScreen === 'analysis-results') setCurrentScreen('analysis');
-            else if (currentScreen === 'debate-details') handleBackToHome();
-            else handleGoToDashboard();
-          });
-        }
-      });
-    }
-
-    // Configuración del perfil
+    // Configuración del perfil (con comportamiento toggle)
     items.push({
       icon: <Settings className="w-6 h-6 text-white" />,
       label: 'Configuración',
-      onClick: () => {
-        alert('Configuración del perfil - Próximamente');
-      }
+      onClick: () => handleNavigationWithConfirm(() => {
+        if (currentScreen === 'settings') {
+          goBack();
+        } else {
+          navigateTo('settings');
+        }
+      })
     });
 
     return items;
@@ -269,7 +281,8 @@ function App() {
     'competition', 
     'scoring', 
     'debate-details',
-    'debate-mode'
+    'debate-mode',
+    'settings'
   ].includes(currentScreen);
 
   if (!isAuthChecked) {
@@ -357,6 +370,9 @@ function App() {
         ) : (
           <HomeScreen onNewDebate={handleNewDebate} onViewDebate={handleViewDebate} onBack={handleGoToDashboard} />
         );
+
+      case 'settings':
+        return <SettingsScreen onBack={handleGoToDashboard} />;
 
       default:
         return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />;

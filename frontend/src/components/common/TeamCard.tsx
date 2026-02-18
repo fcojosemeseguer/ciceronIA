@@ -1,6 +1,7 @@
 /**
  * Componente TeamCard - Panel de equipo con temporizador
  * Responsivo: Desktop, Tablet, Mobile
+ * Soporta TIEMPO EXTRA (tiempos negativos)
  */
 
 import React from 'react';
@@ -27,7 +28,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   roundOrder,
 }) => {
   const isTeamA = teamId === 'A';
-  const progress = (timeRemaining / maxTime) * 100;
+  const isOvertime = timeRemaining < 0; // Detectar tiempo extra
+  const progress = Math.max(0, (timeRemaining / maxTime) * 100); // No permitir progreso negativo
 
   return (
     <div
@@ -35,8 +37,9 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         flex flex-col gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-2xl
         border-2 sm:border-4 border-black
         ${isActive ? 'transition-smooth' : 'opacity-40 md:opacity-50 transition-smooth'}
-        ${isActive && isTeamA ? 'glow-pulse-orange' : ''}
-        ${isActive && !isTeamA ? 'glow-pulse-cyan' : ''}
+        ${isActive && isTeamA && !isOvertime ? 'glow-pulse-orange' : ''}
+        ${isActive && !isTeamA && !isOvertime ? 'glow-pulse-cyan' : ''}
+        ${isActive && isOvertime ? 'glow-pulse-red' : ''} /* Parpadeo rojo en tiempo extra */
         min-h-20 sm:min-h-24 md:min-h-28 flex-1
       `}
       style={{
@@ -62,18 +65,24 @@ export const TeamCard: React.FC<TeamCardProps> = ({
          className={`
            text-center transition-smooth flex-1 flex items-center justify-center
            text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-wider
-           ${isActive ? (isTeamA ? 'text-white' : 'text-white') : 'text-gray-500'}
+           ${!isActive ? 'text-gray-500' : ''}
+           ${isActive && !isOvertime ? 'text-white' : ''}
+           ${isActive && isOvertime ? 'text-red-400 animate-pulse' : ''} /* Rojo y parpadeante en tiempo extra */
          `}
        >
          {isActive ? formatTime(timeRemaining) : '00:00'}
        </div>
 
-      {/* Barra de progreso */}
+      {/* Barra de progreso - Se vacía en tiempo extra */}
       <div className="mt-auto">
         <div className="progress-bar-bg">
           <div
             className={`progress-bar-fill transition-smooth ${
-              isTeamA ? 'bg-[#FF6B00]' : 'bg-[#00E5FF]'
+              isOvertime 
+                ? 'bg-red-500' /* Rojo cuando hay tiempo extra */
+                : isTeamA 
+                  ? 'bg-[#FF6B00]' 
+                  : 'bg-[#00E5FF]'
             }`}
             style={{ width: `${progress}%` }}
           />
@@ -85,12 +94,19 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         <div
           className={`
             text-center text-xs font-semibold py-2 rounded-lg
-            ${isTeamA ? 'bg-[#FF6B00]/20 text-[#FF6B00]' : 'bg-[#00E5FF]/20 text-[#00E5FF]'}
+            ${isOvertime 
+              ? 'bg-red-500/20 text-red-400 animate-pulse' /* Indicador de tiempo extra */
+              : isTeamA 
+                ? 'bg-[#FF6B00]/20 text-[#FF6B00]' 
+                : 'bg-[#00E5FF]/20 text-[#00E5FF]'
+            }
           `}
         >
-          EN TURNO
+          {isOvertime ? '⚠️ TIEMPO EXTRA' : 'EN TURNO'}
         </div>
       )}
     </div>
   );
 };
+
+export default TeamCard;

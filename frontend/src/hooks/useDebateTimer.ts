@@ -28,9 +28,14 @@ export const useDebateTimer = () => {
 
 /**
  * Formatea segundos a formato MM:SS
+ * Soporta tiempo negativo para "Tiempo Extra"
+ * Ejemplos: "03:45", "-01:30", "00:00"
  */
 export const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const isNegative = seconds < 0;
+  const absSeconds = Math.abs(seconds);
+  const mins = Math.floor(absSeconds / 60);
+  const secs = absSeconds % 60;
+  const formattedTime = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  return isNegative ? `-${formattedTime}` : formattedTime;
 };

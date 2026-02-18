@@ -94,19 +94,16 @@ export const useDebateStore = create<DebateStore>()(
       });
     },
 
-    // Control de tiempo
+    // Control de tiempo - AHORA PERMITE TIEMPO NEGATIVO (Tiempo Extra)
     setTimeRemaining: (time: number) => {
-      set({ timeRemaining: Math.max(0, time) });
-
-      // Si el tiempo llega a 0, pausar automáticamente
-      if (time <= 0 && get().isTimerRunning) {
-        get().setTimerRunning(false);
-      }
+      // Ya no limitamos a 0, permitimos negativos para tiempo extra
+      set({ timeRemaining: time });
     },
 
     decrementTime: () => {
       const state = get();
-      if (state.timeRemaining > 0) {
+      // Siempre decrementamos, incluso si es negativo (tiempo extra)
+      if (state.isTimerRunning) {
         get().setTimeRemaining(state.timeRemaining - 1);
       }
     },

@@ -3,7 +3,14 @@
  */
 
 export type TeamPosition = 'A' | 'B';
-export type RoundType = 'Introducción' | 'Primer Refutador' | 'Segundo Refutador' | 'Conclusión';
+export type RoundType = 
+  | 'Introducción' 
+  | 'Primer Refutador' 
+  | 'Segundo Refutador' 
+  | 'Conclusión'
+  | 'Contextualización'  // RETOR
+  | 'Definición'         // RETOR
+  | 'Valoración';        // RETOR
 export type DebateState = 'setup' | 'paused' | 'running' | 'finished';
 
 /**
