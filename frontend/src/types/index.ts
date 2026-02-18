@@ -101,6 +101,16 @@ export interface DebateHistory {
 }
 
 /**
+ * Usuario básico
+ */
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+}
+
+/**
  * Usuario con perfil extendido
  */
 export interface UserProfile {
@@ -205,6 +215,121 @@ export interface DebateScoringResult {
   aiGenerated: boolean;
   summary: string;
 }
+
+// =============================================================================
+// NUEVOS TIPOS PARA BACKEND INTEGRATION
+// =============================================================================
+
+/**
+ * Tipo de debate desde backend
+ */
+export interface DebateType {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  fases: FaseConfig[];
+  posturas: string[];
+  escala_min: number;
+  escala_max: number;
+  evaluation_mode: 'per_speaker' | 'per_team';
+}
+
+/**
+ * Configuración de fase desde backend
+ */
+export interface FaseConfig {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  tiempo_segundos: number;
+  permite_preguntas: boolean;
+  permite_minuto_oro?: boolean;
+  orador_unico?: boolean;
+}
+
+/**
+ * Proyecto de debate
+ */
+export interface Project {
+  code: string;
+  name: string;
+  description: string;
+  debate_type: string;
+  user_code: string;
+  created_at?: string;
+}
+
+/**
+ * Resultado de análisis desde backend
+ */
+export interface AnalysisResult {
+  message: string;
+  fase: string;
+  postura: string;
+  orador: string;
+  criterios: CriterioResult[];
+  total: number;
+  max_total: number;
+  debate_type: string;
+}
+
+/**
+ * Criterio con puntuación
+ */
+export interface CriterioResult {
+  criterio: string;
+  nota: number;
+  anotacion: string;
+}
+
+/**
+ * Upload de audio para análisis
+ */
+export interface AudioUpload {
+  id: string;
+  faseId: string;
+  faseNombre: string;
+  postura: string;
+  orador: string;
+  numOradores: number;
+  file: File | null;
+  wavBlob?: Blob;
+  status: 'pending' | 'converting' | 'uploading' | 'analyzing' | 'completed' | 'error';
+  progress?: number;
+  result?: AnalysisResult;
+  error?: string;
+}
+
+/**
+ * Credenciales de login
+ */
+export interface LoginCredentials {
+  user: string;
+  pswd: string;
+}
+
+/**
+ * Respuesta de autenticación
+ */
+export interface AuthResponse {
+  message: string;
+  access_token: string;
+  token_type: string;
+  user: string;
+}
+
+/**
+ * Datos para crear proyecto
+ */
+export interface CreateProjectData {
+  name: string;
+  description: string;
+  debate_type: string;
+}
+
+// =============================================================================
+// TIPOS LEGACY (mantener para compatibilidad)
+// =============================================================================
 
 /**
  * Rúbrica completa de evaluación por rondas

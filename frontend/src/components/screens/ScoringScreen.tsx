@@ -229,14 +229,14 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
 
   if (!scoringResult) {
     return (
-      <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center pb-32">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00E5FF]"></div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-y-auto pb-32">
       <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -256,8 +256,8 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
               <span className="text-xl font-bold text-white">CiceronAI</span>
             </div>
 
-            {/* Right: Action buttons */}
-            <div className="w-32 flex justify-end items-center gap-2">
+            {/* Right: Edit button */}
+            <div className="w-32 flex justify-end">
               <button
                 onClick={() => setIsEditing(!isEditing)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -266,21 +266,13 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
               >
                 {isEditing ? <><Save className="w-4 h-4" /><span className="hidden sm:inline">Guardar</span></> : <><Edit3 className="w-4 h-4" /><span className="hidden sm:inline">Editar</span></>}
               </button>
-
-              <button
-                onClick={handleDownloadPDF}
-                disabled={isGeneratingPDF}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white rounded-lg hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)] disabled:opacity-50"
-              >
-                {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-32">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">{scoringResult.topic}</h1>
             
@@ -465,29 +457,30 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
               ))}
             </div>
           </div>
+
+          {/* Botones de acción - debajo de Sumatorio y Evaluación Global */}
+          <div className="mt-6 mb-32 bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isGeneratingPDF}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white rounded-xl font-semibold hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)] disabled:opacity-50"
+              >
+                {isGeneratingPDF ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                <span>Descargar PDF</span>
+              </button>
+              
+              <button
+                onClick={handleSaveEvaluation}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-green-600/20 to-green-600/10 text-green-400 rounded-xl font-semibold hover:from-green-600/30 hover:to-green-600/20 transition-all border border-green-500/30 shadow-[0_8px_32px_rgba(34,197,94,0.2)]"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Guardar Evaluación</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      <footer className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 p-4">
-        <div className="max-w-7xl mx-auto flex gap-3">
-          <button
-            onClick={handleDownloadPDF}
-            disabled={isGeneratingPDF}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white rounded-xl font-semibold hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)] disabled:opacity-50"
-          >
-            {isGeneratingPDF ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-            <span className="hidden sm:inline">PDF</span>
-          </button>
-          
-          <button
-            onClick={handleSaveEvaluation}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white rounded-xl font-semibold hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)]"
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Guardar Evaluación</span>
-          </button>
-        </div>
-      </footer>
     </div>
   );
 };

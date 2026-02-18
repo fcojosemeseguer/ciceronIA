@@ -1,49 +1,137 @@
 /**
  * App principal - Componente raíz de la aplicación
- * Gestiona las transiciones entre pantallas
+ * Estructura renovada según especificaciones funcionales
  */
 
 import React, { useState, useEffect } from 'react';
-import { AuthScreen, HomeScreen, SetupScreen, CompetitionScreen, DebateDetailsScreen, ScoringScreen, LandingPage } from './components/screens';
-import { useAuthStore } from './store/authStore';
+import { 
+  AuthScreen, 
+  HomeScreen, 
+  SetupScreen, 
+  CompetitionScreen, 
+  DebateDetailsScreen, 
+  ScoringScreen, 
+  LandingPage,
+  AnalysisScreen,
+  AnalysisResultsScreen,
+  DashboardScreen,
+  DebateModeScreen,
+} from './components/screens';
+import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
-import { DebateHistory } from './types';
+import { DebateHistory, Project } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
-import { Home, ArrowLeft, UserCircle, Settings, Plus, AlertTriangle } from 'lucide-react';
+import { Home, ArrowLeft, UserCircle, Plus, AlertTriangle, Clock, LayoutDashboard, Settings } from 'lucide-react';
 import './App.css';
 
-type AppScreen = 'landing' | 'auth' | 'home' | 'setup' | 'competition' | 'scoring' | 'debate-details';
+type AppScreen = 
+  | 'landing' 
+  | 'auth' 
+  | 'dashboard'
+  | 'debate-mode'
+  | 'setup' 
+  | 'competition' 
+  | 'scoring' 
+  | 'analysis' 
+  | 'analysis-results'
+  | 'home' 
+  | 'debate-details';
 
 function App() {
-  const { checkAuth } = useAuthStore();
+  const { checkAuth, isAuthenticated, logout } = useAuthStore();
   const { selectedDebate, selectDebate } = useDebateHistoryStore();
+  const { currentProject, selectProject, clearUploads } = useAnalysisStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
+  const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
 
   useEffect(() => {
     checkAuth();
     setIsAuthChecked(true);
   }, [checkAuth]);
 
+  // Navegación básica
   const handleGoToLanding = () => setCurrentScreen('landing');
-  const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<'home' | null>(null);
+  const handleGoToDashboard = () => setCurrentScreen('dashboard');
+  
+  // Auth
   const handleAuthenticated = () => {
     if (pendingRedirectAfterAuth) {
       setCurrentScreen(pendingRedirectAfterAuth);
       setPendingRedirectAfterAuth(null);
     } else {
-      setCurrentScreen('landing');
+      setCurrentScreen('dashboard');
     }
   };
-  const handleGoToAuth = (redirectTo?: 'home') => {
+  
+  const handleGoToAuth = (redirectTo?: AppScreen) => {
     if (redirectTo) {
       setPendingRedirectAfterAuth(redirectTo);
     }
     setCurrentScreen('auth');
   };
-  const handleNewDebate = () => setCurrentScreen('setup');
-  const handleStartDebateFromLanding = () => setCurrentScreen('home');
+
+  // Dashboard flows
+  const handleNewDebate = () => {
+    setCurrentScreen('debate-mode');
+  };
+
+  const handleAnalyzeRecorded = () => {
+    if (!isAuthenticated) {
+      handleGoToAuth('home');
+      return;
+    }
+    setCurrentScreen('home');
+  };
+
+  const handleViewHistory = () => {
+    setCurrentScreen('home');
+  };
+
+  // Debate Mode Selection
+  const handleSelectLiveDebate = () => {
+    setCurrentScreen('setup');
+  };
+
+  const handleSelectRecordedDebate = () => {
+    if (!isAuthenticated) {
+      handleGoToAuth('home');
+      return;
+    }
+    setCurrentScreen('home');
+  };
+
+  // Analysis (ahora accesible desde Historial)
+  const handleSelectProject = (project: Project) => {
+    selectProject(project);
+    clearUploads();
+    setCurrentScreen('analysis');
+  };
+
+  const handleQuickAnalysis = () => {
+    selectProject(null);
+    clearUploads();
+    setCurrentScreen('analysis');
+  };
+
+  const handleViewResults = () => {
+    setCurrentScreen('analysis-results');
+  };
+
+  const handleBackFromAnalysis = () => {
+    clearUploads();
+    setCurrentScreen('home');
+  };
+
+  // Flujo legacy (mantener para compatibilidad)
+  const handleStartDebateFromLanding = () => {
+    if (isAuthenticated) {
+      setCurrentScreen('dashboard');
+    } else {
+      handleGoToAuth('dashboard');
+    }
+  };
   
   const handleViewDebate = (debate: DebateHistory) => {
     selectDebate(debate);
@@ -55,6 +143,7 @@ function App() {
     setCurrentScreen('home');
   };
 
+  // Estados para confirmación de salida
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
 
@@ -73,10 +162,7 @@ function App() {
 
   const handleStartDebate = () => setCurrentScreen('competition');
   const handleFinishDebate = () => setCurrentScreen('scoring');
-  const handleFinishScoring = () => setCurrentScreen('home');
-
-  // Determinar si mostrar el dock (solo en pantallas de la app, no en landing/auth)
-  const showDock = ['home', 'setup', 'competition', 'scoring', 'debate-details'].includes(currentScreen);
+  const handleFinishScoring = () => setCurrentScreen('dashboard');
 
   const { state: debateState } = useDebateStore();
 
@@ -93,19 +179,38 @@ function App() {
     }
   };
 
-  // Configurar items del dock según la pantalla actual
+  // Configurar items del dock
   const getDockItems = () => {
     const items = [];
     
-    // Home - siempre visible
-    items.push({
-      icon: <Home className="w-6 h-6 text-white" />,
-      label: 'Inicio',
-      onClick: () => handleNavigationWithConfirm(() => handleGoToLanding())
-    });
+    // Botón principal dinámico: Inicio cuando está en Dashboard, Panel en el resto
+    if (isAuthenticated) {
+      if (currentScreen === 'dashboard') {
+        // En Dashboard: mostrar Inicio (va a Landing)
+        items.push({
+          icon: <Home className="w-6 h-6 text-white" />,
+          label: 'Inicio',
+          onClick: () => handleNavigationWithConfirm(() => handleGoToLanding())
+        });
+      } else {
+        // En otras páginas: mostrar Panel (va a Dashboard)
+        items.push({
+          icon: <LayoutDashboard className="w-6 h-6 text-white" />,
+          label: 'Panel',
+          onClick: () => handleNavigationWithConfirm(() => handleGoToDashboard())
+        });
+      }
+    } else {
+      // No autenticado: siempre mostrar Inicio
+      items.push({
+        icon: <Home className="w-6 h-6 text-white" />,
+        label: 'Inicio',
+        onClick: () => handleNavigationWithConfirm(() => handleGoToLanding())
+      });
+    }
 
-    // Nuevo Debate - solo en la pantalla de Panel del Juez (home)
-    if (currentScreen === 'home') {
+    // Nuevo Debate - visible en dashboard y home
+    if (currentScreen === 'dashboard' || currentScreen === 'home') {
       items.push({
         icon: <Plus className="w-6 h-6 text-white" />,
         label: 'Nuevo Debate',
@@ -113,38 +218,59 @@ function App() {
       });
     }
 
-    // Back - solo si no estamos en home
-    if (currentScreen !== 'home') {
+    // Historial - visible SOLO cuando está en el Panel de Control
+    if (isAuthenticated && currentScreen === 'dashboard') {
+      items.push({
+        icon: <Clock className="w-6 h-6 text-white" />,
+        label: 'Historial',
+        onClick: () => setCurrentScreen('home')
+      });
+    }
+
+    // Back - visible en todas las páginas EXCEPTO dashboard, home, landing y auth
+    if (currentScreen !== 'dashboard' && currentScreen !== 'home' && currentScreen !== 'landing' && currentScreen !== 'auth') {
       items.push({
         icon: <ArrowLeft className="w-6 h-6 text-white" />,
         label: 'Volver',
         onClick: () => {
           handleNavigationWithConfirm(() => {
-            if (currentScreen === 'setup') handleBackToHome();
-            else if (currentScreen === 'competition') handleBackToHome();
-            else if (currentScreen === 'scoring') handleBackToHome();
+            if (currentScreen === 'debate-mode') handleGoToDashboard();
+            else if (currentScreen === 'setup') handleGoToDashboard();
+            else if (currentScreen === 'competition') handleGoToDashboard();
+            else if (currentScreen === 'scoring') handleGoToDashboard();
+            else if (currentScreen === 'analysis') handleBackFromAnalysis();
+            else if (currentScreen === 'analysis-results') setCurrentScreen('analysis');
             else if (currentScreen === 'debate-details') handleBackToHome();
+            else handleGoToDashboard();
           });
         }
       });
     }
 
-    // Profile
-    items.push({
-      icon: <UserCircle className="w-6 h-6 text-white" />,
-      label: 'Perfil',
-      onClick: () => alert('Perfil - Próximamente')
-    });
-
-    // Settings
+    // Configuración del perfil
     items.push({
       icon: <Settings className="w-6 h-6 text-white" />,
       label: 'Configuración',
-      onClick: () => alert('Configuración - Próximamente')
+      onClick: () => {
+        alert('Configuración del perfil - Próximamente');
+      }
     });
 
     return items;
   };
+
+  // Determinar si mostrar el dock
+  const showDock = [
+    'dashboard',
+    'home', 
+    'analysis', 
+    'analysis-results',
+    'setup', 
+    'competition', 
+    'scoring', 
+    'debate-details',
+    'debate-mode'
+  ].includes(currentScreen);
 
   if (!isAuthChecked) {
     return (
@@ -157,32 +283,90 @@ function App() {
   const renderScreen = () => {
     switch (currentScreen) {
       case 'landing':
-        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={handleGoToAuth} />;
+        return (
+          <LandingPage 
+            onStartDebate={handleStartDebateFromLanding} 
+            onLogin={() => handleGoToAuth('dashboard')} 
+          />
+        );
 
       case 'auth':
-        return <AuthScreen onAuthenticated={handleAuthenticated} onBack={handleGoToLanding} redirectTo={pendingRedirectAfterAuth} />;
+        return (
+          <AuthScreen 
+            onAuthenticated={handleAuthenticated} 
+            onBack={handleGoToLanding} 
+            redirectTo={pendingRedirectAfterAuth || undefined} 
+          />
+        );
+
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            onNewDebate={handleNewDebate}
+            onAnalyzeRecorded={handleAnalyzeRecorded}
+            onViewHistory={handleViewHistory}
+          />
+        );
+
+      case 'debate-mode':
+        return (
+          <DebateModeScreen
+            onSelectLive={handleSelectLiveDebate}
+            onSelectRecorded={handleSelectRecordedDebate}
+            onBack={handleGoToDashboard}
+          />
+        );
+
+      case 'analysis':
+        return (
+          <AnalysisScreen
+            project={currentProject}
+            onBack={handleBackFromAnalysis}
+            onViewResults={handleViewResults}
+          />
+        );
+
+      case 'analysis-results':
+        return (
+          <AnalysisResultsScreen
+            onBack={() => setCurrentScreen('analysis')}
+          />
+        );
+
       case 'home':
-        return <HomeScreen onNewDebate={handleNewDebate} onViewDebate={handleViewDebate} onBack={handleGoToLanding} />;
+        return (
+          <HomeScreen 
+            onNewDebate={handleNewDebate} 
+            onViewDebate={handleViewDebate} 
+            onBack={handleGoToDashboard} 
+          />
+        );
+
       case 'setup':
-        return <SetupScreen onStartDebate={handleStartDebate} onBack={handleBackToHome} />;
+        return <SetupScreen onStartDebate={handleStartDebate} onBack={handleGoToDashboard} />;
+
       case 'competition':
         return <CompetitionScreen onFinish={handleFinishDebate} />;
+
       case 'scoring':
-        return <ScoringScreen onFinish={handleFinishScoring} onBack={handleBackToHome} />;
+        return <ScoringScreen onFinish={handleFinishScoring} onBack={handleGoToDashboard} />;
+
       case 'debate-details':
         return selectedDebate ? (
           <DebateDetailsScreen debate={selectedDebate} onBack={handleBackToHome} />
         ) : (
-          <HomeScreen onNewDebate={handleNewDebate} onViewDebate={handleViewDebate} onBack={handleGoToLanding} />
+          <HomeScreen onNewDebate={handleNewDebate} onViewDebate={handleViewDebate} onBack={handleGoToDashboard} />
         );
+
       default:
-        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={handleGoToAuth} />;
+        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />;
     }
   };
 
   return (
-    <div className="w-full h-screen overflow-hidden">
+    <div className="w-full min-h-screen overflow-y-auto">
       {renderScreen()}
+      
       {showDock && (
         <div className="fixed bottom-0 left-0 right-0 z-50 pb-4">
           <Dock

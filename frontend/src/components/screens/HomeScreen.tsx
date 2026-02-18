@@ -1,11 +1,10 @@
 /**
- * HomeScreen - Página de inicio principal
- * Diseño moderno con Aurora background y Glassmorphism
+ * HomeScreen - Historial de Debates
+ * Página dedicada exclusivamente al historial de debates pasados
  */
 
 import React, { useState } from 'react';
 import {
-  Plus,
   History,
   Calendar,
   Clock,
@@ -14,6 +13,7 @@ import {
   Search,
   Filter,
   Trash2,
+  Trophy,
 } from 'lucide-react';
 import { useDebateHistoryStore } from '../../store/debateHistoryStore';
 import { DebateHistory } from '../../types';
@@ -25,7 +25,7 @@ interface HomeScreenProps {
   onBack?: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onNewDebate, onViewDebate }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onViewDebate }) => {
   const { getDebatesSortedByDate, deleteDebate } = useDebateHistoryStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterWinner, setFilterWinner] = useState<'all' | 'A' | 'B' | 'draw'>('all');
@@ -82,112 +82,115 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNewDebate, onViewDebat
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden px-4 sm:px-6 lg:px-8 relative z-10 pt-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto pb-32">
+      {/* Header Section */}
+      <div className="pt-20 pb-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          {/* Welcome Section */}
-          <div className="text-center mb-10">
-            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4 tracking-tight">
-              Panel del Juez
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-400/20 to-cyan-400/20 flex items-center justify-center border border-white/10">
+                <History className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3 tracking-tight">
+              Historial de Debates
             </h1>
             <p className="text-white/60 text-lg max-w-2xl mx-auto">
-              Gestiona y evalúa debates competitivos con herramientas profesionales
+              Consulta y revisa todos los debates registrados
             </p>
           </div>
+        </div>
+      </div>
 
-          {/* Action Card */}
-          <div className="mb-10 flex justify-center">
-            <LiquidGlassButton 
-              onClick={onNewDebate}
-              variant="primary"
-              size="lg"
-              className="w-full max-w-md"
-            >
-              <Plus className="w-6 h-6" />
-              <span className="text-lg">Nuevo Debate</span>
-            </LiquidGlassButton>
+      {/* Main Content */}
+      <main className="px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Stats Card */}
+          <div className="mb-8">
+            <div className="inline-flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-6 py-3">
+              <span className="text-2xl font-bold text-white">{sortedDebates.length}</span>
+              <span className="text-white/50">{sortedDebates.length === 1 ? 'debate registrado' : 'debates registrados'}</span>
+            </div>
           </div>
 
-          {/* Debate History Section */}
+          {/* Filters */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+              <input
+                type="text"
+                placeholder="Buscar debates por tema o equipo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="
+                  w-full pl-10 pr-4 py-3
+                  bg-white/5
+                  border border-white/10
+                  rounded-xl
+                  text-white placeholder-white/40
+                  focus:outline-none focus:border-white/30
+                  transition-colors
+                "
+              />
+            </div>
+            
+            <div className="relative sm:w-48">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+              <select
+                value={filterWinner}
+                onChange={(e) => setFilterWinner(e.target.value as any)}
+                className="
+                  w-full pl-10 pr-8 py-3
+                  bg-white/5
+                  border border-white/10
+                  rounded-xl
+                  text-white
+                  focus:outline-none focus:border-white/30
+                  appearance-none cursor-pointer
+                "
+              >
+                <option value="all" className="bg-slate-900">Todos los resultados</option>
+                <option value="A" className="bg-slate-900">Ganó Equipo A</option>
+                <option value="B" className="bg-slate-900">Ganó Equipo B</option>
+                <option value="draw" className="bg-slate-900">Empates</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Debates List */}
           <div className="
             bg-[#1a1f2e]
             border border-white/10
             rounded-3xl
             shadow-[0_8px_32px_rgba(0,0,0,0.3)]
-            flex flex-col
-            max-h-[400px]
-            min-h-[250px]
+            overflow-hidden
           ">
-            {/* Header */}
-            <div className="p-6 border-b border-white/10 flex-shrink-0">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400/20 to-cyan-400/20 flex items-center justify-center">
-                    <History className="w-5 h-5 text-white/80" />
-                  </div>
-                  <h2 className="text-xl font-bold text-white">Historial de Debates</h2>
-                </div>
-                
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <input
-                      type="text"
-                      placeholder="Buscar debates..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="
-                        pl-10 pr-4 py-2
-                        bg-white/5
-                        border border-white/10
-                        rounded-xl
-                        text-white placeholder-white/40
-                        focus:outline-none focus:border-white/30
-                        transition-colors
-                        w-full sm:w-64
-                      "
-                    />
-                  </div>
-                  
-                  <div className="relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <select
-                      value={filterWinner}
-                      onChange={(e) => setFilterWinner(e.target.value as any)}
-                      className="
-                        pl-10 pr-8 py-2
-                        bg-white/5
-                        border border-white/10
-                        rounded-xl
-                        text-white
-                        focus:outline-none focus:border-white/30
-                        appearance-none cursor-pointer
-                        w-full sm:w-40
-                      "
-                    >
-                      <option value="all" className="bg-slate-900">Todos</option>
-                      <option value="A" className="bg-slate-900">Ganó Equipo A</option>
-                      <option value="B" className="bg-slate-900">Ganó Equipo B</option>
-                      <option value="draw" className="bg-slate-900">Empates</option>
-                    </select>
-                  </div>
-                </div>
+            {/* List Header */}
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Trophy className="w-5 h-5 text-white/60" />
+                <h2 className="text-lg font-semibold text-white">
+                  {filteredDebates.length} {filteredDebates.length === 1 ? 'debate' : 'debates'}
+                </h2>
               </div>
             </div>
 
-            {/* Debates List */}
-            <div className="divide-y divide-white/5 overflow-y-auto flex-1 scrollbar-hide">
+            {/* Debates */}
+            <div className="divide-y divide-white/5">
               {filteredDebates.length === 0 ? (
-                <div className="p-12 text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
-                    <MessageSquare className="w-8 h-8 text-white/30" />
+                <div className="p-16 text-center">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-white/5 flex items-center justify-center">
+                    <MessageSquare className="w-10 h-10 text-white/30" />
                   </div>
-                  <p className="text-white/50">
+                  <p className="text-white/50 text-lg mb-2">
                     {searchTerm || filterWinner !== 'all' 
                       ? 'No se encontraron debates con esos filtros'
-                      : 'No hay debates registrados todavía'}
+                      : 'No hay debates registrados'}
+                  </p>
+                  <p className="text-white/30 text-sm">
+                    {searchTerm || filterWinner !== 'all' 
+                      ? 'Intenta con otros términos de búsqueda'
+                      : 'Los debates que registres aparecerán aquí'}
                   </p>
                 </div>
               ) : (
@@ -207,17 +210,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNewDebate, onViewDebat
                     >
                       <div className="flex items-start justify-between gap-4 pr-12">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg font-semibold text-white mb-2 truncate">
+                          <h3 className="text-lg font-semibold text-white mb-3 truncate">
                             {debate.topic}
                           </h3>
                           
                           <div className="flex flex-wrap items-center gap-4 text-sm text-white/50">
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1.5">
                               <Calendar className="w-4 h-4" />
                               {formatDate(debate.date)}
                             </span>
                             
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1.5">
                               <Clock className="w-4 h-4" />
                               {formatDuration(debate.duration)}
                             </span>
@@ -229,7 +232,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNewDebate, onViewDebat
                         </div>
 
                         <div className="flex items-center gap-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getWinnerColor(debate.winner)}`}>
+                          <span className={`px-3 py-1.5 rounded-full text-sm font-medium border ${getWinnerColor(debate.winner)}`}>
                             {getWinnerText(debate)}
                           </span>
                           
@@ -317,3 +320,5 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNewDebate, onViewDebat
     </div>
   );
 };
+
+export default HomeScreen;

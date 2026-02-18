@@ -1,39 +1,55 @@
 /**
  * AuthScreen - Pantalla de Login/Registro
- * Estilo Aurora con colores naranja/cian
+ * Usa nombre de usuario (no email) según el backend
  */
 
 import React, { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { Mail, Lock, User, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Lock, User, Loader2, Eye, EyeOff, ArrowLeft, AlertCircle } from 'lucide-react';
 import { LiquidGlassButton } from '../common';
+import { validateUsername, validatePassword, getUsernameRequirements, getPasswordRequirements } from '../../utils/authValidation';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
   onBack?: () => void;
-  redirectTo?: 'home' | null;
+  redirectTo?: string | null;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack, redirectTo }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
+    username: '',
     password: '',
   });
+  const [validationError, setValidationError] = useState('');
 
   const { login, register, isLoading, error, clearError } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+    setValidationError('');
+
+    // Validar usuario
+    const usernameError = validateUsername(formData.username);
+    if (usernameError) {
+      setValidationError(usernameError);
+      return;
+    }
+
+    // Validar contraseña
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      setValidationError(passwordError);
+      return;
+    }
 
     let success;
     if (isLogin) {
-      success = await login(formData.email, formData.password);
+      success = await login(formData.username, formData.password);
     } else {
-      success = await register(formData.name, formData.email, formData.password);
+      success = await register(formData.username, formData.password);
     }
 
     if (success) {
@@ -45,12 +61,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) clearError();
+    if (validationError) setValidationError('');
   };
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
     clearError();
-    setFormData({ name: '', email: '', password: '' });
+    setValidationError('');
+    setFormData({ username: '', password: '' });
   };
 
   return (
@@ -77,54 +95,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
             shadow-[0_8px_32px_rgba(0,0,0,0.3)]
           ">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Campo de nombre (solo registro) */}
-              {!isLogin && (
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-2">
-                    Nombre completo
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="Tu nombre"
-                      className="
-                        w-full pl-10 pr-4 py-3
-                        bg-white/5
-                        border border-white/10
-                        rounded-xl
-                        text-white placeholder-white/30
-                        focus:outline-none focus:border-[#4A5568]
-                        transition-colors
-                        appearance-none
-                        bg-transparent
-                      "
-                      required={!isLogin}
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck="false"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Campo de email */}
+              {/* Campo de nombre de usuario */}
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">
-                  Correo electrónico
+                  Nombre de usuario
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
                   <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
+                    type="text"
+                    name="username"
+                    value={formData.username}
                     onChange={handleInputChange}
-                    placeholder="tu@email.com"
+                    placeholder="tu_usuario"
                     className="
                       w-full pl-10 pr-4 py-3
                       bg-white/5
@@ -137,12 +120,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
                       bg-transparent
                     "
                     required
+                    minLength={3}
+                    maxLength={20}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck="false"
                   />
                 </div>
+                <p className="text-xs text-white/40 mt-1">{getUsernameRequirements()}</p>
               </div>
 
               {/* Campo de contraseña */}
@@ -170,7 +156,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
                       bg-transparent
                     "
                     required
-                    minLength={6}
+                    minLength={8}
+                    maxLength={32}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
@@ -184,10 +171,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
-                <p className="text-xs text-white/40 mt-1">Mínimo 6 caracteres</p>
+                <p className="text-xs text-white/40 mt-1">{getPasswordRequirements()}</p>
               </div>
 
-              {/* Error message */}
+              {/* Error de validación */}
+              {validationError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-sm text-red-400">{validationError}</p>
+                </div>
+              )}
+
+              {/* Error del servidor */}
               {error && (
                 <div className="p-3 bg-[#1F2A33]/50 border border-[#1F2A33] rounded-lg">
                   <p className="text-sm text-white/80 text-center">{error}</p>
