@@ -307,10 +307,14 @@ export const useDebateStore = create<DebateStore>()(
       const state = get();
       const nextRounds = generateDebateRounds(state.config);
       
-      // Special case: Block Team A navigation from Round 6 (prevent 6→8 skip)
-      // Round 6 is index 5, and we want to force going through Round 7 first
-      if (state.currentRoundIndex === 5) {
-        return false; // Block Turno A at Round 6
+      // Detectar formato UPCT vs RETOR
+      const isUpct = state.config.roundDurations.introduccion === 180; // 3 min = UPCT
+      
+      // Special case: Block Team A navigation from Round 6 (prevent 6→8 skip) ONLY in UPCT format
+      // In UPCT: Round 6 (index 5) is B, Round 7 (index 6) is B (Conclusion), Round 8 (index 7) is A
+      // We want to force going through Round 7 (B's Conclusion) before Round 8 (A's Conclusion)
+      if (isUpct && state.currentRoundIndex === 5) {
+        return false; // Block Turno A at Round 6 only in UPCT format
       }
       
       // Search for next Team A turn
