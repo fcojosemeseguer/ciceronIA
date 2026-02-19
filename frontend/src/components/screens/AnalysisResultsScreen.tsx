@@ -131,7 +131,7 @@ export const AnalysisResultsScreen: React.FC<AnalysisResultsScreenProps> = ({
                       <p className="font-medium text-white">
                         {upload.faseNombre} - {upload.postura}
                       </p>
-                      <p className="text-sm text-white/50">{upload.orador}</p>
+                      <p className="text-sm text-white/50">{upload.numOradores} orador{upload.numOradores !== 1 ? 'es' : ''}</p>
                     </div>
                   </div>
 

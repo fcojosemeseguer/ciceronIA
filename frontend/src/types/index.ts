@@ -297,7 +297,6 @@ export interface AudioUpload {
   faseId: string;
   faseNombre: string;
   postura: string;
-  orador: string;
   numOradores: number;
   file: File | null;
   wavBlob?: Blob;
@@ -305,6 +304,11 @@ export interface AudioUpload {
   progress?: number;
   result?: AnalysisResult;
   error?: string;
+  // Campos adicionales para configuración de fase
+  minutoOroUtilizado?: boolean;      // ¿Se usó minuto de oro?
+  preguntasRealizadas?: number;      // Número de preguntas realizadas
+  preguntasRespondidas?: number;     // Número de preguntas respondidas
+  primerMinutoProtegido?: boolean;   // RETOR: primer minuto sin preguntas
 }
 
 /**

@@ -17,11 +17,12 @@ import {
   DashboardScreen,
   DebateModeScreen,
   SettingsScreen,
+  AnalysisSetupScreen,
 } from './components/screens';
 import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
-import { DebateHistory, Project } from './types';
+import { DebateHistory } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
 import { Home, Plus, AlertTriangle, Clock, LayoutDashboard, Settings } from 'lucide-react';
 import './App.css';
@@ -34,6 +35,7 @@ type AppScreen =
   | 'setup' 
   | 'competition' 
   | 'scoring' 
+  | 'analysis-setup'
   | 'analysis' 
   | 'analysis-results'
   | 'home' 
@@ -43,11 +45,19 @@ type AppScreen =
 function App() {
   const { checkAuth, isAuthenticated, logout } = useAuthStore();
   const { selectedDebate, selectDebate } = useDebateHistoryStore();
-  const { currentProject, selectProject, clearUploads } = useAnalysisStore();
+  const { clearUploads } = useAnalysisStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
+  
+  // Configuración del análisis de grabados
+  const [analysisConfig, setAnalysisConfig] = useState<{
+    teamAName: string;
+    teamBName: string;
+    debateTopic: string;
+    debateType: string;
+  } | null>(null);
 
   // Función para navegar guardando historial
   const navigateTo = (screen: AppScreen) => {
@@ -101,10 +111,25 @@ function App() {
 
   const handleAnalyzeRecorded = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('home');
+      handleGoToAuth('analysis-setup');
       return;
     }
-    navigateTo('home');
+    navigateTo('analysis-setup');
+  };
+
+  const handleAnalysisConfigured = (config: {
+    teamAName: string;
+    teamBName: string;
+    debateTopic: string;
+    debateType: string;
+  }) => {
+    setAnalysisConfig(config);
+    navigateTo('analysis');
+  };
+
+  const handleBackFromAnalysisSetup = () => {
+    setAnalysisConfig(null);
+    navigateTo('dashboard');
   };
 
   const handleViewHistory = () => {
@@ -118,32 +143,20 @@ function App() {
 
   const handleSelectRecordedDebate = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('home');
+      handleGoToAuth('analysis-setup');
       return;
     }
-    navigateTo('home');
+    navigateTo('analysis-setup');
   };
 
-  // Analysis (ahora accesible desde Historial)
-  const handleSelectProject = (project: Project) => {
-    selectProject(project);
-    clearUploads();
-    navigateTo('analysis');
-  };
-
-  const handleQuickAnalysis = () => {
-    selectProject(null);
-    clearUploads();
-    navigateTo('analysis');
-  };
-
+  // Analysis - Análisis de debates grabados
   const handleViewResults = () => {
     navigateTo('analysis-results');
   };
 
   const handleBackFromAnalysis = () => {
     clearUploads();
-    navigateTo('home');
+    navigateTo('dashboard');
   };
 
   // Flujo legacy (mantener para compatibilidad)
@@ -330,10 +343,18 @@ function App() {
           />
         );
 
+      case 'analysis-setup':
+        return (
+          <AnalysisSetupScreen
+            onConfigured={handleAnalysisConfigured}
+            onBack={handleBackFromAnalysisSetup}
+          />
+        );
+
       case 'analysis':
         return (
           <AnalysisScreen
-            project={currentProject}
+            config={analysisConfig}
             onBack={handleBackFromAnalysis}
             onViewResults={handleViewResults}
           />

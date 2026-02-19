@@ -10,17 +10,22 @@ import { LiquidGlassButton, AudioDropZone } from '../common';
 import { generateId } from '../../utils/audioConverter';
 
 interface AnalysisScreenProps {
-  project: Project | null; // null para análisis rápido
+  config: {
+    teamAName: string;
+    teamBName: string;
+    debateTopic: string;
+    debateType: string;
+  } | null;
   onBack: () => void;
   onViewResults: () => void;
 }
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
-  project,
+  config,
   onBack,
   onViewResults,
 }) => {
-  const { debateTypes, selectedDebateType, selectDebateType } = useProjectStore();
+  const { debateTypes, selectedDebateType, selectDebateType, fetchDebateTypes } = useProjectStore();
   const {
     uploads,
     isAnalyzing,
@@ -38,20 +43,26 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const [numOradores, setNumOradores] = useState(1);
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Seleccionar tipo de debate
+  // Cargar tipos de debate si no están cargados
   useEffect(() => {
-    if (project) {
-      selectDebateType(project.debate_type);
+    if (debateTypes.length === 0) {
+      fetchDebateTypes();
+    }
+  }, [debateTypes.length, fetchDebateTypes]);
+
+  // Seleccionar tipo de debate basado en la configuración
+  useEffect(() => {
+    if (config?.debateType) {
+      selectDebateType(config.debateType);
     } else if (debateTypes.length > 0 && !selectedDebateType) {
       selectDebateType(debateTypes[0].id);
     }
-  }, [project, debateTypes, selectedDebateType, selectDebateType]);
+  }, [config, debateTypes, selectedDebateType, selectDebateType]);
 
   // Generar uploads iniciales basados en el tipo de debate
   useEffect(() => {
-    if (selectedDebateType && uploads.length === 0) {
+    if (selectedDebateType && selectedDebateType.fases.length > 0 && uploads.length === 0) {
       const initialUploads: AudioUpload[] = [];
-      let oradorIndex = 1;
 
       selectedDebateType.fases.forEach((fase) => {
         selectedDebateType.posturas.forEach((postura) => {
@@ -60,12 +71,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
             faseId: fase.id,
             faseNombre: fase.nombre,
             postura,
-            orador: `Orador ${oradorIndex}`,
             numOradores: 1,
             file: null,
             status: 'pending',
           });
-          oradorIndex++;
         });
       });
 
@@ -84,6 +93,33 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     }
   };
 
+  const handleMinutoOroChange = (uploadId: string, value: boolean) => {
+    const upload = uploads.find((u) => u.id === uploadId);
+    if (upload) {
+      updateUploadStatus(uploadId, upload.status, {
+        minutoOroUtilizado: value,
+      });
+    }
+  };
+
+  const handlePreguntasChange = (uploadId: string, field: 'preguntasRealizadas' | 'preguntasRespondidas', value: number) => {
+    const upload = uploads.find((u) => u.id === uploadId);
+    if (upload) {
+      updateUploadStatus(uploadId, upload.status, {
+        [field]: value,
+      });
+    }
+  };
+
+  const handleNumOradoresChange = (uploadId: string, value: number) => {
+    const upload = uploads.find((u) => u.id === uploadId);
+    if (upload) {
+      updateUploadStatus(uploadId, upload.status, {
+        numOradores: value,
+      });
+    }
+  };
+
   const handleClearUpload = (uploadId: string) => {
     updateUploadStatus(uploadId, 'pending', {
       file: null,
@@ -96,12 +132,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const handleRetryUpload = (uploadId: string) => {
     const upload = uploads.find((u) => u.id === uploadId);
     if (upload) {
-      analyseAudio(uploadId, project, selectedDebateType);
+      analyseAudio(uploadId, null, selectedDebateType);
     }
   };
 
   const handleAnalyseAll = () => {
-    analyseAll(project, selectedDebateType);
+    analyseAll(null, selectedDebateType);
   };
 
   const handleChangeDebateType = (typeId: string) => {
@@ -146,37 +182,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-white">
-                  {project ? project.name : 'Análisis Rápido'}
+                  {config?.debateTopic || 'Análisis de Debate'}
                 </h1>
                 <p className="text-white/50">
-                  {selectedDebateType.nombre}
+                  {config?.teamAName} vs {config?.teamBName} · {selectedDebateType?.nombre}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {/* Selector de tipo de debate (solo para análisis rápido) */}
-              {!project && (
-                <select
-                  value={selectedDebateType.id}
-                  onChange={(e) => handleChangeDebateType(e.target.value)}
-                  className="
-                    px-4 py-2
-                    bg-white/5 border border-white/10
-                    rounded-xl text-white text-sm
-                    focus:outline-none focus:border-[#00E5FF]/50
-                    transition-colors
-                    appearance-none cursor-pointer
-                  "
-                >
-                  {debateTypes.map((dt) => (
-                    <option key={dt.id} value={dt.id} className="bg-slate-900">
-                      {dt.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
-
               {/* Configuración de oradores */}
               <button
                 onClick={() => setShowConfigModal(true)}
@@ -276,9 +290,80 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                         <span className="text-sm font-medium text-white">
                           {upload.postura}
                         </span>
-                        <span className="text-xs text-white/40">
-                          {upload.orador}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white/40">Nº oradores:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={upload.numOradores}
+                            onChange={(e) => handleNumOradoresChange(upload.id, parseInt(e.target.value) || 1)}
+                            className="w-12 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs text-center"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Configuración de fase */}
+                      <div className="mb-4 space-y-3">
+                        {/* Minuto de oro */}
+                        {fase.permite_minuto_oro && (
+                          <button
+                            onClick={() => handleMinutoOroChange(upload.id, !upload.minutoOroUtilizado)}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all duration-200 ${
+                              upload.minutoOroUtilizado
+                                ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                                : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                upload.minutoOroUtilizado
+                                  ? 'bg-yellow-500 text-slate-900'
+                                  : 'bg-white/10 text-white/40'
+                              }`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                              <span className="text-sm font-medium">
+                                {upload.minutoOroUtilizado ? 'Minuto de oro activado' : 'Usar minuto de oro'}
+                              </span>
+                            </div>
+                            {upload.minutoOroUtilizado && (
+                              <span className="text-xs bg-yellow-500/30 px-2 py-1 rounded-full">
+                                +1 min
+                              </span>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Preguntas */}
+                        {fase.permite_preguntas && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-white/70 w-32">Preguntas hechas:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={10}
+                                value={upload.preguntasRealizadas || 0}
+                                onChange={(e) => handlePreguntasChange(upload.id, 'preguntasRealizadas', parseInt(e.target.value) || 0)}
+                                className="w-16 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-sm text-center"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-white/70 w-32">Respondidas:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={upload.preguntasRealizadas || 0}
+                                value={upload.preguntasRespondidas || 0}
+                                onChange={(e) => handlePreguntasChange(upload.id, 'preguntasRespondidas', parseInt(e.target.value) || 0)}
+                                className="w-16 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-sm text-center"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <AudioDropZone

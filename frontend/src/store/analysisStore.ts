@@ -87,21 +87,29 @@ export const useAnalysisStore = create<AnalysisStore>()(
           result = await analysisService.analyse({
             fase: upload.faseNombre,
             postura: upload.postura,
-            orador: upload.orador,
+            orador: `${upload.numOradores} oradores`,
             num_speakers: upload.numOradores,
             project_code: project.code,
             jwt: token,
             file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
+            // Campos opcionales de configuración
+            minuto_oro_utilizado: upload.minutoOroUtilizado,
+            preguntas_realizadas: upload.preguntasRealizadas,
+            preguntas_respondidas: upload.preguntasRespondidas,
           });
         } else if (debateType) {
           // Análisis rápido sin proyecto
           result = await analysisService.quickAnalyse({
             fase: upload.faseNombre,
             postura: upload.postura,
-            orador: upload.orador,
+            orador: `${upload.numOradores} oradores`,
             num_speakers: upload.numOradores,
             debate_type: debateType.id,
             file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
+            // Campos opcionales de configuración
+            minuto_oro_utilizado: upload.minutoOroUtilizado,
+            preguntas_realizadas: upload.preguntasRealizadas,
+            preguntas_respondidas: upload.preguntasRespondidas,
           });
         } else {
           throw new Error('Se requiere un proyecto o tipo de debate');
