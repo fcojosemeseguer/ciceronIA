@@ -108,3 +108,26 @@ export function getRoundTypeLabel(roundType: RoundType, isRetor: boolean = false
   }
   return roundType;
 }
+
+/**
+ * Normaliza el nombre de una fase para el backend
+ * Elimina tildes y convierte a formato esperado por el API
+ */
+export function normalizePhaseName(phaseName: string): string {
+  const normalized = phaseName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Eliminar diacríticos (tildes)
+  
+  // Mapeo específico para fases conocidas
+  const phaseMapping: Record<string, string> = {
+    'Contextualizacion': 'Contextualizacion',
+    'Definicion': 'Definicion',
+    'Valoracion': 'Valoracion',
+    'Conclusion': 'Conclusion',
+    'Introduccion': 'introduccion',
+    'Primer Refutador': 'refutacion1',
+    'Segundo Refutador': 'refutacion2',
+  };
+  
+  return phaseMapping[normalized] || normalized.toLowerCase();
+}

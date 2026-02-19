@@ -17,3 +17,5 @@ export { DashboardScreen } from './DashboardScreen';
 export { DebateModeScreen } from './DebateModeScreen';
 export { SettingsScreen } from './SettingsScreen';
 export { AnalysisSetupScreen } from './AnalysisSetupScreen';
+export { ProjectsScreen } from './ProjectsScreen';
+export { ProjectDetailsScreen } from './ProjectDetailsScreen';

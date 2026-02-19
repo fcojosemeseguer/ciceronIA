@@ -264,6 +264,9 @@ export interface Project {
   debate_type: string;
   user_code: string;
   created_at?: string;
+  team_a_name?: string;
+  team_b_name?: string;
+  debate_topic?: string;
 }
 
 /**
@@ -336,6 +339,9 @@ export interface CreateProjectData {
   name: string;
   description: string;
   debate_type: string;
+  team_a_name?: string;
+  team_b_name?: string;
+  debate_topic?: string;
 }
 
 // =============================================================================

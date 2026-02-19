@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useEffect } from 'react';
 import { analysisService } from '../api/analysis';
-import { AudioRecording, AnalysisResult, TeamPosition, RoundType } from '../types';
+import { AudioRecording, AnalysisResult, TeamPosition, RoundType, Project } from '../types';
 
 export interface QueuedAnalysis {
   id: string;
@@ -18,7 +18,7 @@ export interface QueuedAnalysis {
 }
 
 export interface UseRealtimeAnalysisReturn {
-  queueAnalysis: (recording: AudioRecording) => void;
+  queueAnalysis: (recording: AudioRecording) => Promise<AnalysisResult>;
   getQueueStatus: () => QueuedAnalysis[];
   getCompletedResults: () => AnalysisResult[];
   isProcessing: boolean;
@@ -47,6 +47,7 @@ const mapTeamToPostura = (team: TeamPosition): string => {
 };
 
 export const useRealtimeAnalysis = (
+  project: Project | null,
   debateType: string = 'upct',
   onResultReceived?: (result: AnalysisResult, recording: AudioRecording) => void
 ): UseRealtimeAnalysisReturn => {
@@ -78,14 +79,35 @@ export const useRealtimeAnalysis = (
       );
 
       // Enviar al backend
-      const result = await analysisService.quickAnalyse({
-        fase: mapRoundTypeToFase(pending.recording.roundType),
-        postura: mapTeamToPostura(pending.recording.team),
-        orador: `Orador ${pending.recording.order}`,
-        num_speakers: 1,
-        debate_type: debateType,
-        file: file,
-      });
+      let result: AnalysisResult;
+
+      if (project) {
+        // Análisis con proyecto
+        const token = localStorage.getItem('ciceron_token');
+        if (!token) {
+          throw new Error('No hay sesión activa');
+        }
+
+        result = await analysisService.analyse({
+          fase: mapRoundTypeToFase(pending.recording.roundType),
+          postura: mapTeamToPostura(pending.recording.team),
+          orador: `Orador ${pending.recording.order}`,
+          num_speakers: 1,
+          project_code: project.code,
+          jwt: token,
+          file: file,
+        });
+      } else {
+        // Análisis rápido sin proyecto (para compatibilidad temporal)
+        result = await analysisService.quickAnalyse({
+          fase: mapRoundTypeToFase(pending.recording.roundType),
+          postura: mapTeamToPostura(pending.recording.team),
+          orador: `Orador ${pending.recording.order}`,
+          num_speakers: 1,
+          debate_type: debateType,
+          file: file,
+        });
+      }
 
       if (!isMountedRef.current) return;
 
@@ -112,20 +134,34 @@ export const useRealtimeAnalysis = (
         setTimeout(() => processNextInQueue(), 100);
       }
     }
-  }, [debateType, onResultReceived]);
+  }, [project, debateType, onResultReceived]);
 
   // Añadir grabación a la cola
-  const queueAnalysis = useCallback((recording: AudioRecording) => {
-    const queuedItem: QueuedAnalysis = {
-      id: recording.id,
-      recording,
-      status: 'pending',
-    };
+  const queueAnalysis = useCallback(async (recording: AudioRecording): Promise<AnalysisResult> => {
+    return new Promise((resolve, reject) => {
+      const queuedItem: QueuedAnalysis = {
+        id: recording.id,
+        recording,
+        status: 'pending',
+      };
 
-    queueRef.current.push(queuedItem);
-    
-    // Iniciar procesamiento si no está procesando
-    processNextInQueue();
+      queueRef.current.push(queuedItem);
+
+      // Iniciar procesamiento si no está procesando
+      processNextInQueue();
+
+      // Esperar a que se complete el análisis
+      const checkInterval = setInterval(() => {
+        const item = queueRef.current.find(q => q.id === recording.id);
+        if (item?.status === 'completed' && item.result) {
+          clearInterval(checkInterval);
+          resolve(item.result);
+        } else if (item?.status === 'error') {
+          clearInterval(checkInterval);
+          reject(new Error(item.error || 'Error en el análisis'));
+        }
+      }, 100);
+    });
   }, [processNextInQueue]);
 
   // Obtener estado de la cola

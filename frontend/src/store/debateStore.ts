@@ -11,6 +11,7 @@ import {
   TeamPosition,
   AudioRecording,
   AnalysisResult,
+  Project,
 } from '../types';
 import {
   generateDebateRounds,
@@ -50,6 +51,7 @@ interface DebateStore extends DebateSessionState {
   
   // Inicialización
   initializeDebate: (config: DebateConfig) => void;
+  initializeDebateFromProject: (project: Project) => void;
 
   // Control de tiempo
   setTimeRemaining: (time: number) => void;
@@ -103,6 +105,44 @@ export const useDebateStore = create<DebateStore>()(
         currentRoundIndex: 0,
         currentTeam: 'A',
         timeRemaining: config.roundDurations.introduccion,
+        isTimerRunning: false,
+        recordings: [],
+        analysisResults: [],
+        analysisQueue: [],
+      });
+    },
+
+    // Inicializar debate desde un proyecto (unifica debate y proyecto)
+    initializeDebateFromProject: (project: Project) => {
+      // Determinar duraciones según el tipo de debate
+      const isRetor = project.debate_type === 'retor';
+      const roundDurations = isRetor
+        ? {
+            introduccion: 360,      // 6 minutos (Contextualización)
+            primerRefutador: 120,   // 2 minutos (Definición)
+            segundoRefutador: 300,  // 5 minutos (Valoración)
+            conclusion: 180,        // 3 minutos
+          }
+        : {
+            introduccion: 180,      // 3 minutos
+            primerRefutador: 240,   // 4 minutos
+            segundoRefutador: 240,  // 4 minutos
+            conclusion: 180,        // 3 minutos
+          };
+
+      const config: DebateConfig = {
+        teamAName: project.team_a_name || 'Equipo A',
+        teamBName: project.team_b_name || 'Equipo B',
+        debateTopic: project.debate_topic || project.name || 'Tema del Debate',
+        roundDurations,
+      };
+
+      set({
+        config,
+        state: 'setup',
+        currentRoundIndex: 0,
+        currentTeam: 'A',
+        timeRemaining: roundDurations.introduccion,
         isTimerRunning: false,
         recordings: [],
         analysisResults: [],

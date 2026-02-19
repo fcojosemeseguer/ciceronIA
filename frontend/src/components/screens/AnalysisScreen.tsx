@@ -10,18 +10,13 @@ import { LiquidGlassButton, AudioDropZone } from '../common';
 import { generateId } from '../../utils/audioConverter';
 
 interface AnalysisScreenProps {
-  config: {
-    teamAName: string;
-    teamBName: string;
-    debateTopic: string;
-    debateType: string;
-  } | null;
+  project: Project;
   onBack: () => void;
   onViewResults: () => void;
 }
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
-  config,
+  project,
   onBack,
   onViewResults,
 }) => {
@@ -69,14 +64,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     }
   }, [debateTypes.length, fetchDebateTypes]);
 
-  // Seleccionar tipo de debate basado en la configuración
+  // Seleccionar tipo de debate basado en el proyecto
   useEffect(() => {
-    if (config?.debateType) {
-      selectDebateType(config.debateType);
+    if (project?.debate_type) {
+      selectDebateType(project.debate_type);
     } else if (debateTypes.length > 0 && !selectedDebateType) {
       selectDebateType(debateTypes[0].id);
     }
-  }, [config, debateTypes, selectedDebateType, selectDebateType]);
+  }, [project, debateTypes, selectedDebateType, selectDebateType]);
 
   // Generar uploads iniciales basados en el tipo de debate
   useEffect(() => {
@@ -155,12 +150,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const handleRetryUpload = (uploadId: string) => {
     const upload = uploads.find((u) => u.id === uploadId);
     if (upload) {
-      analyseAudio(uploadId, null, selectedDebateType);
+      analyseAudio(uploadId, project, selectedDebateType);
     }
   };
 
   const handleAnalyseAll = () => {
-    analyseAll(null, selectedDebateType);
+    analyseAll(project, selectedDebateType);
   };
 
   const handleChangeDebateType = (typeId: string) => {
@@ -206,10 +201,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-white">
-                  {config?.debateTopic || 'Análisis de Debate'}
+                  {project?.debate_topic || project?.name || 'Análisis de Debate'}
                 </h1>
                 <p className="text-white/50">
-                  {config?.teamAName} vs {config?.teamBName} · {selectedDebateType?.nombre}
+                  {project?.team_a_name || 'Equipo A'} vs {project?.team_b_name || 'Equipo B'} · {selectedDebateType?.nombre}
                 </p>
               </div>
             </div>

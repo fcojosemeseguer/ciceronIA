@@ -18,13 +18,15 @@ import {
   DebateModeScreen,
   SettingsScreen,
   AnalysisSetupScreen,
+  ProjectsScreen,
+  ProjectDetailsScreen,
 } from './components/screens';
 import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
-import { DebateHistory } from './types';
+import { DebateHistory, Project } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
-import { Home, Plus, AlertTriangle, Clock, LayoutDashboard, Settings } from 'lucide-react';
+import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, Settings } from 'lucide-react';
 import './App.css';
 
 type AppScreen = 
@@ -35,6 +37,8 @@ type AppScreen =
   | 'setup' 
   | 'competition' 
   | 'scoring' 
+  | 'projects'
+  | 'project-details'
   | 'analysis-setup'
   | 'analysis' 
   | 'analysis-results'
@@ -51,13 +55,11 @@ function App() {
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
   
-  // Configuración del análisis de grabados
-  const [analysisConfig, setAnalysisConfig] = useState<{
-    teamAName: string;
-    teamBName: string;
-    debateTopic: string;
-    debateType: string;
-  } | null>(null);
+  // Proyecto seleccionado para análisis
+  const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
+  
+  // Proyecto para debate en directo
+  const [liveDebateProject, setLiveDebateProject] = useState<Project | null>(null);
 
   // Función para navegar guardando historial
   const navigateTo = (screen: AppScreen) => {
@@ -111,26 +113,27 @@ function App() {
 
   const handleAnalyzeRecorded = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('analysis-setup');
+      handleGoToAuth('projects');
       return;
     }
-    navigateTo('analysis-setup');
+    navigateTo('projects');
   };
 
-  const handleAnalysisConfigured = (config: {
-    teamAName: string;
-    teamBName: string;
-    debateTopic: string;
-    debateType: string;
-  }) => {
-    setAnalysisConfig(config);
+  const handleSelectProject = (project: Project) => {
+    setSelectedAnalysisProject(project);
+    navigateTo('project-details');
+  };
+
+  const handleStartLiveDebate = (project: Project) => {
+    setSelectedAnalysisProject(project);
+    navigateTo('competition');
+  };
+
+  const handleAddAnalysis = () => {
     navigateTo('analysis');
   };
 
-  const handleBackFromAnalysisSetup = () => {
-    setAnalysisConfig(null);
-    navigateTo('dashboard');
-  };
+
 
   const handleViewHistory = () => {
     navigateTo('home');
@@ -143,10 +146,10 @@ function App() {
 
   const handleSelectRecordedDebate = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('analysis-setup');
+      handleGoToAuth('projects');
       return;
     }
-    navigateTo('analysis-setup');
+    navigateTo('projects');
   };
 
   // Analysis - Análisis de debates grabados
@@ -259,12 +262,12 @@ function App() {
       });
     }
 
-    // Historial - visible SOLO cuando está en el Panel de Control
+    // Mis Proyectos - visible SOLO cuando está en el Panel de Control
     if (isAuthenticated && currentScreen === 'dashboard') {
       items.push({
-        icon: <Clock className="w-6 h-6 text-white" />,
-        label: 'Historial',
-        onClick: () => navigateTo('home')
+        icon: <FolderOpen className="w-6 h-6 text-white" />,
+        label: 'Mis Proyectos',
+        onClick: () => navigateTo('projects')
       });
     }
 
@@ -288,6 +291,8 @@ function App() {
   const showDock = [
     'dashboard',
     'home', 
+    'projects',
+    'project-details',
     'analysis', 
     'analysis-results',
     'setup', 
@@ -343,20 +348,42 @@ function App() {
           />
         );
 
-      case 'analysis-setup':
+      case 'projects':
         return (
-          <AnalysisSetupScreen
-            onConfigured={handleAnalysisConfigured}
-            onBack={handleBackFromAnalysisSetup}
+          <ProjectsScreen
+            onSelectProject={handleSelectProject}
+            onStartLiveDebate={handleStartLiveDebate}
+            onBack={handleGoToDashboard}
+          />
+        );
+
+      case 'project-details':
+        return selectedAnalysisProject ? (
+          <ProjectDetailsScreen
+            project={selectedAnalysisProject}
+            onBack={() => navigateTo('projects')}
+            onAddAnalysis={handleAddAnalysis}
+          />
+        ) : (
+          <ProjectsScreen
+            onSelectProject={handleSelectProject}
+            onStartLiveDebate={handleStartLiveDebate}
+            onBack={handleGoToDashboard}
           />
         );
 
       case 'analysis':
-        return (
+        return selectedAnalysisProject ? (
           <AnalysisScreen
-            config={analysisConfig}
-            onBack={handleBackFromAnalysis}
+            project={selectedAnalysisProject}
+            onBack={() => navigateTo('project-details')}
             onViewResults={handleViewResults}
+          />
+        ) : (
+          <ProjectsScreen
+            onSelectProject={handleSelectProject}
+            onStartLiveDebate={handleStartLiveDebate}
+            onBack={handleGoToDashboard}
           />
         );
 
@@ -380,7 +407,19 @@ function App() {
         return <SetupScreen onStartDebate={handleStartDebate} onBack={handleGoToDashboard} />;
 
       case 'competition':
-        return <CompetitionScreen onFinish={handleFinishDebate} />;
+        return selectedAnalysisProject ? (
+          <CompetitionScreen 
+            project={selectedAnalysisProject} 
+            onFinish={handleFinishDebate}
+            onBack={() => navigateTo('project-details')}
+          />
+        ) : (
+          <ProjectsScreen
+            onSelectProject={handleSelectProject}
+            onStartLiveDebate={handleStartLiveDebate}
+            onBack={handleGoToDashboard}
+          />
+        );
 
       case 'scoring':
         return <ScoringScreen onFinish={handleFinishScoring} onBack={handleGoToDashboard} />;

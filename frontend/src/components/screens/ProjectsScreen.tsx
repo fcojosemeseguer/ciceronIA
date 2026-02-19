@@ -3,20 +3,20 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Loader2, Zap, ArrowLeft } from 'lucide-react';
+import { Plus, Loader2, ArrowLeft, FileAudio, Mic } from 'lucide-react';
 import { useProjectStore } from '../../store';
 import { Project, CreateProjectData } from '../../types';
-import { LiquidGlassButton, ProjectCard } from '../common';
+import { LiquidGlassButton } from '../common';
 
 interface ProjectsScreenProps {
   onSelectProject: (project: Project) => void;
-  onQuickAnalysis: () => void;
+  onStartLiveDebate: (project: Project) => void;
   onBack: () => void;
 }
 
 export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
   onSelectProject,
-  onQuickAnalysis,
+  onStartLiveDebate,
   onBack,
 }) => {
   const {
@@ -35,6 +35,9 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
     name: '',
     description: '',
     debate_type: 'upct',
+    team_a_name: 'Equipo A',
+    team_b_name: 'Equipo B',
+    debate_topic: '',
   });
   const [formError, setFormError] = useState('');
 
@@ -49,10 +52,22 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
       return;
     }
 
+    if (!formData.debate_topic?.trim()) {
+      setFormError('El tema del debate es obligatorio');
+      return;
+    }
+
     try {
       const projectCode = await createProject(formData);
       setShowCreateModal(false);
-      setFormData({ name: '', description: '', debate_type: 'upct' });
+      setFormData({ 
+        name: '', 
+        description: '', 
+        debate_type: 'upct',
+        team_a_name: 'Equipo A',
+        team_b_name: 'Equipo B',
+        debate_topic: '',
+      });
       
       // Seleccionar el proyecto recién creado
       const newProject = useProjectStore.getState().projects.find(p => p.code === projectCode);
@@ -84,15 +99,6 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
             </div>
 
             <div className="flex gap-3">
-              <LiquidGlassButton
-                onClick={onQuickAnalysis}
-                variant="secondary"
-                className="flex items-center gap-2"
-              >
-                <Zap className="w-4 h-4" />
-                <span className="hidden sm:inline">Análisis Rápido</span>
-              </LiquidGlassButton>
-
               <LiquidGlassButton
                 onClick={() => {
                   setFormError('');
@@ -139,14 +145,45 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {projects.map((project) => (
-                    <ProjectCard
-                      key={project.code}
-                      project={project}
-                      debateType={debateTypes.find(dt => dt.id === project.debate_type)}
-                      onClick={() => onSelectProject(project)}
-                    />
-                  ))}
+                  {projects.map((project) => {
+                    const debateType = debateTypes.find(dt => dt.id === project.debate_type);
+                    return (
+                      <div
+                        key={project.code}
+                        className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all"
+                      >
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-white mb-1">{project.name}</h3>
+                          <p className="text-sm text-white/50">{project.debate_topic}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs px-2 py-1 rounded-full bg-[#00E5FF]/20 text-[#00E5FF]">
+                              {debateType?.nombre || project.debate_type}
+                            </span>
+                            <span className="text-xs text-white/40">
+                              {project.team_a_name} vs {project.team_b_name}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onSelectProject(project)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                          >
+                            <FileAudio className="w-4 h-4" />
+                            <span className="text-sm">Analizar Audio</span>
+                          </button>
+                          <button
+                            onClick={() => onStartLiveDebate(project)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#00E5FF]/20 border border-[#00E5FF]/30 rounded-xl text-[#00E5FF] hover:bg-[#00E5FF]/30 transition-colors"
+                          >
+                            <Mic className="w-4 h-4" />
+                            <span className="text-sm">Debate en Directo</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -162,19 +199,20 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
             onClick={() => setShowCreateModal(false)}
           />
           <div className="
-            relative w-full max-w-md
+            relative w-full max-w-2xl max-h-[90vh] overflow-y-auto
             backdrop-blur-2xl bg-black/40
             border border-white/10
             rounded-3xl
             shadow-[0_8px_32px_rgba(0,0,0,0.4)]
             p-6
           ">
-            <h3 className="text-xl font-bold text-white mb-6">Nuevo Proyecto</h3>
+            <h3 className="text-xl font-bold text-white mb-6">Nuevo Debate</h3>
 
             <div className="space-y-4">
+              {/* Nombre del proyecto */}
               <div>
                 <label className="block text-sm text-white/70 mb-2">
-                  Nombre del proyecto *
+                  Nombre del debate *
                 </label>
                 <input
                   type="text"
@@ -194,26 +232,77 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                 />
               </div>
 
+              {/* Tema del debate */}
               <div>
                 <label className="block text-sm text-white/70 mb-2">
-                  Descripción
+                  Tema del debate *
                 </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                <input
+                  type="text"
+                  value={formData.debate_topic}
+                  onChange={(e) => {
+                    setFormData({ ...formData, debate_topic: e.target.value });
+                    setFormError('');
+                  }}
                   className="
                     w-full px-4 py-3
                     bg-white/5 border border-white/10
                     rounded-xl text-white
                     focus:outline-none focus:border-[#00E5FF]/50
                     transition-colors
-                    resize-none
                   "
-                  rows={3}
-                  placeholder="Descripción opcional del proyecto..."
+                  placeholder="Ej: ¿Debería implementarse la jornada laboral de 4 días?"
                 />
               </div>
 
+              {/* Equipos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#FF6B00] mb-2">
+                    Equipo A (A favor) *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.team_a_name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, team_a_name: e.target.value });
+                      setFormError('');
+                    }}
+                    className="
+                      w-full px-4 py-3
+                      bg-white/5 border border-white/10
+                      rounded-xl text-white
+                      focus:outline-none focus:border-[#FF6B00]/50
+                      transition-colors
+                    "
+                    placeholder="Nombre del equipo A"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-[#00E5FF] mb-2">
+                    Equipo B (En contra) *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.team_b_name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, team_b_name: e.target.value });
+                      setFormError('');
+                    }}
+                    className="
+                      w-full px-4 py-3
+                      bg-white/5 border border-white/10
+                      rounded-xl text-white
+                      focus:outline-none focus:border-[#00E5FF]/50
+                      transition-colors
+                    "
+                    placeholder="Nombre del equipo B"
+                  />
+                </div>
+              </div>
+
+              {/* Tipo de debate */}
               <div>
                 <label className="block text-sm text-white/70 mb-2">
                   Tipo de debate
@@ -244,6 +333,27 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                 </select>
               </div>
 
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm text-white/70 mb-2">
+                  Descripción (opcional)
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="
+                    w-full px-4 py-3
+                    bg-white/5 border border-white/10
+                    rounded-xl text-white
+                    focus:outline-none focus:border-[#00E5FF]/50
+                    transition-colors
+                    resize-none
+                  "
+                  rows={2}
+                  placeholder="Notas adicionales sobre el debate..."
+                />
+              </div>
+
               {formError && (
                 <p className="text-sm text-red-400">{formError}</p>
               )}
@@ -266,7 +376,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                   {isLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    'Crear'
+                    'Crear Debate'
                   )}
                 </LiquidGlassButton>
               </div>

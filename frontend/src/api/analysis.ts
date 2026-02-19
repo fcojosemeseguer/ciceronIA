@@ -61,7 +61,7 @@ export const analysisService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 120000, // 2 minutos para análisis
+      timeout: 1800000, // 30 minutos para análisis
     });
     return response.data;
   },
@@ -93,7 +93,7 @@ export const analysisService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 120000, // 2 minutos para análisis
+      timeout: 1800000, // 30 minutos para análisis
     });
     return response.data;
   },

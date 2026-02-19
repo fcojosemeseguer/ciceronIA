@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { AudioUpload, AnalysisResult, Project, DebateType } from '../types';
 import { analysisService } from '../api';
+import { normalizePhaseName } from '../utils/roundsSequence';
 
 interface AnalysisState {
   uploads: AudioUpload[];
@@ -20,8 +21,8 @@ interface AnalysisStore extends AnalysisState {
   addUpload: (upload: AudioUpload) => void;
   removeUpload: (id: string) => void;
   updateUploadStatus: (id: string, status: AudioUpload['status'], updates?: Partial<AudioUpload>) => void;
-  analyseAudio: (uploadId: string, project: Project | null, debateType: DebateType | null) => Promise<void>;
-  analyseAll: (project: Project | null, debateType: DebateType | null) => Promise<void>;
+  analyseAudio: (uploadId: string, project: Project, debateType: DebateType | null) => Promise<void>;
+  analyseAll: (project: Project, debateType: DebateType | null) => Promise<void>;
   selectProject: (project: Project | null) => void;
   clearUploads: () => void;
   clearError: () => void;
@@ -67,7 +68,7 @@ export const useAnalysisStore = create<AnalysisStore>()(
       set({ globalProgress: progress });
     },
 
-    analyseAudio: async (uploadId: string, project: Project | null, debateType: DebateType | null) => {
+    analyseAudio: async (uploadId: string, project: Project, debateType: DebateType | null) => {
       const upload = get().uploads.find(u => u.id === uploadId);
       if (!upload || !upload.file || !upload.wavBlob) return;
 
@@ -77,43 +78,30 @@ export const useAnalysisStore = create<AnalysisStore>()(
         return;
       }
 
+      if (!project) {
+        set({ error: 'Se requiere un proyecto para el análisis' });
+        return;
+      }
+
       get().updateUploadStatus(uploadId, 'analyzing', { progress: 0 });
 
       try {
         let result: AnalysisResult;
 
-        if (project) {
-          // Análisis con proyecto
-          result = await analysisService.analyse({
-            fase: upload.faseNombre,
-            postura: upload.postura,
-            orador: `${upload.numOradores} oradores`,
-            num_speakers: upload.numOradores,
-            project_code: project.code,
-            jwt: token,
-            file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
-            // Campos opcionales de configuración
-            minuto_oro_utilizado: upload.minutoOroUtilizado,
-            preguntas_realizadas: upload.preguntasRealizadas,
-            preguntas_respondidas: upload.preguntasRespondidas,
-          });
-        } else if (debateType) {
-          // Análisis rápido sin proyecto
-          result = await analysisService.quickAnalyse({
-            fase: upload.faseNombre,
-            postura: upload.postura,
-            orador: `${upload.numOradores} oradores`,
-            num_speakers: upload.numOradores,
-            debate_type: debateType.id,
-            file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
-            // Campos opcionales de configuración
-            minuto_oro_utilizado: upload.minutoOroUtilizado,
-            preguntas_realizadas: upload.preguntasRealizadas,
-            preguntas_respondidas: upload.preguntasRespondidas,
-          });
-        } else {
-          throw new Error('Se requiere un proyecto o tipo de debate');
-        }
+        // Análisis con proyecto (siempre requiere proyecto)
+        result = await analysisService.analyse({
+          fase: normalizePhaseName(upload.faseNombre),
+          postura: upload.postura,
+          orador: `${upload.numOradores} oradores`,
+          num_speakers: upload.numOradores,
+          project_code: project.code,
+          jwt: token,
+          file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
+          // Campos opcionales de configuración
+          minuto_oro_utilizado: upload.minutoOroUtilizado,
+          preguntas_realizadas: upload.preguntasRealizadas,
+          preguntas_respondidas: upload.preguntasRespondidas,
+        });
 
         get().updateUploadStatus(uploadId, 'completed', { 
           result,
@@ -130,7 +118,7 @@ export const useAnalysisStore = create<AnalysisStore>()(
       }
     },
 
-    analyseAll: async (project: Project | null, debateType: DebateType | null) => {
+    analyseAll: async (project: Project, debateType: DebateType | null) => {
       const pendingUploads = get().uploads.filter(u => 
         u.status === 'pending' && u.file && u.wavBlob
       );

@@ -6,7 +6,7 @@
 import React from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { GlassNavbar } from '../common';
-import { Plus, FileAudio, History, Mic, Upload } from 'lucide-react';
+import { Plus, FileAudio, FolderOpen, Mic, Upload } from 'lucide-react';
 
 interface DashboardScreenProps {
   onNewDebate: () => void;
@@ -39,12 +39,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       onClick: onAnalyzeRecorded,
     },
     {
-      id: 'history',
-      title: 'Historial de Debates',
-      description: 'Revisa debates anteriores y sus evaluaciones',
-      icon: <History className="w-8 h-8" />,
+      id: 'projects',
+      title: 'Mis Proyectos',
+      description: 'Gestiona tus debates y análisis',
+      icon: <FolderOpen className="w-8 h-8" />,
       color: 'from-purple-500 to-pink-600',
-      onClick: onViewHistory,
+      onClick: onAnalyzeRecorded,
     },
   ];
 

@@ -142,6 +142,29 @@ export const AudioDropZone: React.FC<AudioDropZoneProps> = ({
     );
   }
 
+  // Archivo subido pero pendiente de análisis
+  if (upload?.file && (upload.status === 'pending' || upload.status === 'converting')) {
+    return (
+      <div className="relative p-3 rounded-xl border border-[#00E5FF]/30 bg-[#00E5FF]/10">
+        <button
+          onClick={onClear}
+          className="absolute top-1 right-1 p-1 text-white/50 hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <FileAudio className="w-5 h-5 text-[#00E5FF]" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-white truncate">{upload.file.name}</p>
+            <p className="text-xs text-[#00E5FF]">
+              {upload.status === 'converting' ? 'Convirtiendo...' : 'Listo para analizar'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onDragOver={handleDragOver}
