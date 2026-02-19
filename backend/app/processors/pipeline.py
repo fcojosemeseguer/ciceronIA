@@ -314,7 +314,8 @@ class ChatSession:
             for criterio_id in criterios:
                 criterio_cfg = self.config.get_criterio_config(criterio_id)
                 if criterio_cfg:
-                    prompt_parts.append(f"- {criterio_cfg.nombre} ({criterio_id})")
+                    prompt_parts.append(
+                        f"- {criterio_cfg.nombre} ({criterio_id})")
                     for sub in criterio_cfg.sub_items:
                         prompt_parts.append(f"    * {sub}")
                 else:
@@ -335,9 +336,11 @@ class ChatSession:
         if duracion_segundos is not None:
             fase_cfg = self.config.get_fase_by_id(fase_id)
             tiempo_esperado = fase_cfg.tiempo_segundos if fase_cfg else 0
-            prompt_parts.append(f"DURACIÓN DE LA INTERVENCIÓN: {duracion_segundos:.2f} segundos")
+            prompt_parts.append(
+                f"DURACIÓN DE LA INTERVENCIÓN: {duracion_segundos:.2f} segundos")
             if tiempo_esperado > 0:
-                prompt_parts.append(f"TIEMPO ASIGNADO A ESTA FASE: {tiempo_esperado} segundos")
+                prompt_parts.append(
+                    f"TIEMPO ASIGNADO A ESTA FASE: {tiempo_esperado} segundos")
             prompt_parts.append("")
 
         prompt_parts.extend([
@@ -391,7 +394,8 @@ class ChatSession:
             fase_nombre = fase_config.nombre if fase_config else fase_nombre
 
         # Normalizar postura
-        postura_str = postura.value if isinstance(postura, Enum) else str(postura)
+        postura_str = postura.value if isinstance(
+            postura, Enum) else str(postura)
 
         # Construir el prompt
         user_message = self._build_evaluation_prompt(

@@ -1,6 +1,6 @@
 from app.core.database import (
     create_user, check_user, get_user_code, create_project,
-    create_analysis, get_projects, get_project, get_project_debate_type,
+    create_analysis, get_projects, get_project, get_project_debate_type, save_metrics, save_transcription
 )
 from app.api.v1.models import CredsInput, NewProjectInfo, AnalyseData, QuickAnalyseData, AuthData, AuthDataProject
 from app.processors.pipeline import create_chat, DebateFase, Postura
@@ -157,7 +157,8 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
         try:
             debate_config = get_debate_type(debate_type_id)
         except ValueError:
-            raise HTTPException(400, detail=f"Project has invalid debate type: {debate_type_id}")
+            raise HTTPException(
+                400, detail=f"Project has invalid debate type: {debate_type_id}")
 
         # Validar fase contra la config del tipo de debate
         fase_nombre = data.fase
@@ -206,6 +207,8 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
         transcription = analysis_data["transcript"]
         metrics = analysis_data["metrics"]
 
+        save_transcription(str(file_path), transcription, "")
+        save_metrics(str(file_path), metrics)
         if transcription:
             duracion = transcription[-1]["end"] - transcription[0]["start"]
         else:
@@ -264,9 +267,8 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
         else:
             raise RuntimeError("error while saving data")
 
-    except HTTPException:
-        raise
     except Exception as e:
+        print(e)
         raise HTTPException(
             500, detail=f"error while analysing {e}")
     finally:
@@ -408,20 +410,20 @@ async def getproject(data: AuthDataProject):
         payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
         user_code = payload["user_code"]
         project_code = data.project_code
-        
+
         # Obtener el proyecto
         from app.core.database import projects_table, User
         project = projects_table.get(
             (User.code == project_code) & (User.user_code == user_code)
         )
-        
+
         if not project:
             raise HTTPException(404, "Project not found")
-        
+
         # Obtener los análisis del proyecto
         result = get_project(
             {"user_code": user_code, "project_code": project_code})
-        
+
         return {
             "message": f"here is project {project_code}",
             "project": project,
