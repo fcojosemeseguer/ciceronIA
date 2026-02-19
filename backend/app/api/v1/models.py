@@ -39,6 +39,9 @@ class NewProjectInfo(BaseModel):
     description: str = Field(..., min_length=0, max_length=128)
     jwt: str = Field(...)
     debate_type: str = Field(default="upct", min_length=1, max_length=32)
+    team_a_name: str = Field(default="Equipo A", min_length=1, max_length=64)
+    team_b_name: str = Field(default="Equipo B", min_length=1, max_length=64)
+    debate_topic: str = Field(default="", min_length=0, max_length=256)
 
 
 class AnalyseData(BaseModel):

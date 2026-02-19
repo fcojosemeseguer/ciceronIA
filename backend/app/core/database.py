@@ -65,13 +65,19 @@ def create_project(data: dict):
         desc = data["desc"]
         user_code = data["user_code"]
         debate_type = data.get("debate_type", "upct")
+        team_a_name = data.get("team_a_name", "Equipo A")
+        team_b_name = data.get("team_b_name", "Equipo B")
+        debate_topic = data.get("debate_topic", "")
         project_code = str(uuid4())
         result = projects_table.insert({
             'name': name,
             'desc': desc,
             'user_code': user_code,
             'code': project_code,
-            'debate_type': debate_type
+            'debate_type': debate_type,
+            'team_a_name': team_a_name,
+            'team_b_name': team_b_name,
+            'debate_topic': debate_topic
         })
         return project_code if project_code else None
     except Exception as e:

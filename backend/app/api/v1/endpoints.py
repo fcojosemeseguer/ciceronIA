@@ -127,12 +127,18 @@ async def newproject(data: NewProjectInfo):
             "desc": data.description,
             "user_code": user_code,
             "debate_type": data.debate_type,
+            "team_a_name": data.team_a_name,
+            "team_b_name": data.team_b_name,
+            "debate_topic": data.debate_topic,
         })
         if project_code is not None:
             return {
                 "message": "project created",
                 "project_code": project_code,
                 "debate_type": data.debate_type,
+                "team_a_name": data.team_a_name,
+                "team_b_name": data.team_b_name,
+                "debate_topic": data.debate_topic,
             }
     except HTTPException:
         raise
@@ -400,9 +406,29 @@ async def getprojects(data: AuthData):
 async def getproject(data: AuthDataProject):
     try:
         payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
+        user_code = payload["user_code"]
+        project_code = data.project_code
+        
+        # Obtener el proyecto
+        from app.core.database import projects_table, User
+        project = projects_table.get(
+            (User.code == project_code) & (User.user_code == user_code)
+        )
+        
+        if not project:
+            raise HTTPException(404, "Project not found")
+        
+        # Obtener los análisis del proyecto
         result = get_project(
-            {"user_code": payload["user_code"], "project_code": data.project_code})
-        return {"message": f"here is project {data.project_code}", "content": result}
+            {"user_code": user_code, "project_code": project_code})
+        
+        return {
+            "message": f"here is project {project_code}",
+            "project": project,
+            "content": result
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"error {e}")
         raise HTTPException(500, f"error {e}")
