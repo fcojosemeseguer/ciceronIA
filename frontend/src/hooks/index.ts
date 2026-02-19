@@ -6,3 +6,4 @@ export { useDebateTimer, formatTime } from './useDebateTimer';
 export { useAudioRecorder } from './useAudioRecorder';
 export { useAutoAudioRecording } from './useAutoAudioRecording';
 export { useAudioConverter } from './useAudioConverter';
+export { useRealtimeAnalysis } from './useRealtimeAnalysis';

@@ -42,6 +42,25 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
 
   const [numOradores, setNumOradores] = useState(1);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const uploadsInitialized = React.useRef(false);
+
+  // DEBUG: Ver cuándo se monta el componente
+  useEffect(() => {
+    console.log('AnalysisScreen montado');
+    console.log('Uploads actuales:', uploads.length);
+    return () => {
+      console.log('AnalysisScreen desmontado');
+    };
+  }, []);
+
+  // Solo limpiar uploads si es una navegación nueva (viene de analysis-setup)
+  // No limpiar si ya hay uploads (evitar perder datos al re-renderizar)
+  useEffect(() => {
+    if (uploads.length === 0 && !uploadsInitialized.current) {
+      console.log('Inicializando uploads vacíos');
+      uploadsInitialized.current = false;
+    }
+  }, [uploads.length]);
 
   // Cargar tipos de debate si no están cargados
   useEffect(() => {
@@ -61,7 +80,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
 
   // Generar uploads iniciales basados en el tipo de debate
   useEffect(() => {
-    if (selectedDebateType && selectedDebateType.fases.length > 0 && uploads.length === 0) {
+    if (selectedDebateType && selectedDebateType.fases.length > 0 && !uploadsInitialized.current && uploads.length === 0) {
+      uploadsInitialized.current = true;
+      
       const initialUploads: AudioUpload[] = [];
 
       selectedDebateType.fases.forEach((fase) => {
@@ -80,7 +101,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
 
       initialUploads.forEach((upload) => addUpload(upload));
     }
-  }, [selectedDebateType, uploads.length, addUpload]);
+  // Solo depende de selectedDebateType, NO de uploads.length
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDebateType, addUpload]);
 
   const handleFileSelected = (uploadId: string, file: File, wavBlob: Blob) => {
     const upload = uploads.find((u) => u.id === uploadId);
@@ -173,6 +196,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
+                  // Solo limpiar cuando realmente se sale
                   clearUploads();
                   onBack();
                 }}

@@ -136,7 +136,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     }
   }, [clearError]);
 
-  const stopRecording = useCallback(async (): Promise<AudioRecording | null> => {
+    const stopRecording = useCallback(async (): Promise<AudioRecording | null> => {
     if (!isRecording || !audioContextRef.current) {
       return null;
     }
@@ -159,40 +159,65 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       mediaStreamRef.current = null;
     }
 
-    // Crear AudioBuffer a partir de los chunks
-    const audioContext = audioContextRef.current;
-    const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
-    const audioBuffer = audioContext.createBuffer(1, totalLength, audioContext.sampleRate);
-    const channelData = audioBuffer.getChannelData(0);
+    try {
+      // Crear AudioBuffer a partir de los chunks
+      const audioContext = audioContextRef.current;
+      const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
+      
+      // Validar que hay datos de audio
+      if (totalLength === 0) {
+        console.warn('No se capturó audio - buffer vacío');
+        setIsRecording(false);
+        return null;
+      }
+      
+      const audioBuffer = audioContext.createBuffer(1, totalLength, audioContext.sampleRate);
+      const channelData = audioBuffer.getChannelData(0);
 
-    let offset = 0;
-    for (const chunk of audioChunksRef.current) {
-      channelData.set(chunk, offset);
-      offset += chunk.length;
+      let offset = 0;
+      for (const chunk of audioChunksRef.current) {
+        channelData.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Cerrar AudioContext
+      await audioContext.close();
+      audioContextRef.current = null;
+
+      setIsRecording(false);
+
+      // Convertir a WAV
+      const wavBlob = audioBufferToWav(audioBuffer);
+
+      // Crear grabación
+      const recording: AudioRecording = {
+        id: `recording_${Date.now()}`,
+        team: 'A',
+        roundType: 'Introducción',
+        order: 1,
+        timestamp: new Date().toISOString(),
+        duration,
+        blob: wavBlob,
+        url: URL.createObjectURL(wavBlob),
+      };
+
+      return recording;
+    } catch (error) {
+      console.error('Error al procesar la grabación:', error);
+      
+      // Asegurar que el AudioContext se cierre incluso si hay error
+      if (audioContextRef.current) {
+        try {
+          await audioContextRef.current.close();
+        } catch (e) {
+          // Ignorar error al cerrar
+        }
+        audioContextRef.current = null;
+      }
+      
+      setIsRecording(false);
+      return null;
     }
-
-    // Cerrar AudioContext
-    await audioContext.close();
-    audioContextRef.current = null;
-
-    setIsRecording(false);
-
-    // Convertir a WAV
-    const wavBlob = audioBufferToWav(audioBuffer);
-
-    // Crear grabación
-    const recording: AudioRecording = {
-      id: `recording_${Date.now()}`,
-      team: 'A',
-      roundType: 'Introducción',
-      order: 1,
-      timestamp: new Date().toISOString(),
-      duration,
-      blob: wavBlob,
-      url: URL.createObjectURL(wavBlob),
-    };
-
-    return recording;
   }, [isRecording]);
 
   return {

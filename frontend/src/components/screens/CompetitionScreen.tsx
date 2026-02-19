@@ -3,12 +3,14 @@
  * Estilo Aurora con colores naranja/cian
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateTimer } from '../../hooks/useDebateTimer';
 import { useAutoAudioRecording } from '../../hooks/useAutoAudioRecording';
+import { useRealtimeAnalysis } from '../../hooks/useRealtimeAnalysis';
 import { TeamCard, CentralPanel } from '../common';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { AudioRecording, AnalysisResult } from '../../types';
 
 interface CompetitionScreenProps {
   onFinish?: () => void;
@@ -35,9 +37,32 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
     isLastRound,
     canNavigateToTeamATurn,
     canNavigateToTeamBTurn,
+    addAnalysisResult,
   } = useDebateStore();
 
-  const { isRecording, audioError } = useAutoAudioRecording();
+  // Hook para análisis en tiempo real
+  const handleAnalysisComplete = useCallback((result: AnalysisResult) => {
+    addAnalysisResult(result);
+  }, [addAnalysisResult]);
+
+  const {
+    queueAnalysis,
+    getQueueStatus,
+    isProcessing,
+    pendingCount,
+    completedCount,
+    errorCount,
+  } = useRealtimeAnalysis('upct', handleAnalysisComplete);
+
+  // Hook de grabación con callback para análisis
+  const handleRecordingComplete = useCallback((recording: AudioRecording) => {
+    queueAnalysis(recording);
+  }, [queueAnalysis]);
+
+  const { isRecording, audioError } = useAutoAudioRecording({
+    onRecordingComplete: handleRecordingComplete,
+  });
+  
   useDebateTimer();
 
   const currentRound = getCurrentRound();
@@ -87,8 +112,9 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
-        {/* Recording indicators - moved to top right */}
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        {/* Recording and Analysis indicators */}
+        <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
+          {/* Recording indicator */}
           {isRecording && (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF6B00]/20 border border-[#FF6B00]/30">
               <Mic className="w-4 h-4 text-[#FF6B00] animate-pulse" />
@@ -98,6 +124,35 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ onFinish }
           {audioError && (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30">
               <MicOff className="w-4 h-4 text-yellow-400" />
+            </div>
+          )}
+          
+          {/* Analysis status indicators */}
+          {(isProcessing || pendingCount > 0 || completedCount > 0) && (
+            <div className="flex flex-col gap-1">
+              {isProcessing && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30">
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                  <span className="text-blue-400 text-sm font-medium">Analizando...</span>
+                </div>
+              )}
+              {pendingCount > 0 && !isProcessing && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/30">
+                  <span className="text-purple-400 text-sm">{pendingCount} pendiente{pendingCount > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {completedCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <span className="text-green-400 text-sm">{completedCount} analizado{completedCount > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {errorCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/20 border border-red-500/30">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <span className="text-red-400 text-sm">{errorCount} error{errorCount > 1 ? 'es' : ''}</span>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -14,7 +14,10 @@ import {
   ChevronUp,
   Edit3,
   Save,
-  Mic
+  Mic,
+  Brain,
+  BarChart3,
+  Users
 } from 'lucide-react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateHistoryStore } from '../../store/debateHistoryStore';
@@ -52,8 +55,9 @@ const getScoreBgColor = (score: number) => {
 };
 
 export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }) => {
-  const { config, recordings } = useDebateStore();
+  const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis } = useDebateStore();
   const { addDebate } = useDebateHistoryStore();
+  const analysisResults = getAnalysisResults();
   
   const [scoringResult, setScoringResult] = useState<DebateScoringResult | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -71,6 +75,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     teamConnectionA: 0,
     teamConnectionB: 0
   });
+  const [showAnalysisResults, setShowAnalysisResults] = useState(true);
 
   useEffect(() => {
     initializeEmptyScoring();
@@ -276,19 +281,129 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">{scoringResult.topic}</h1>
             
-            <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
-              <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'A' ? 'border-[#FF6B00]/50 bg-[#FF6B00]/10' : 'border-slate-700'}`}>
-                <p className="text-[#FF6B00] text-sm font-medium mb-1">{scoringResult.teamAName}</p>
-                <p className="text-3xl font-bold text-white">{scoringResult.teamAScore.totalScore}</p>
+            {/* Toggle entre resultados manuales y análisis automático */}
+            {analysisResults.length > 0 && (
+              <div className="flex justify-center gap-2 mb-6">
+                <button
+                  onClick={() => setShowAnalysisResults(true)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    showAnalysisResults 
+                      ? 'bg-gradient-to-r from-purple-600/30 to-blue-600/30 text-white border border-purple-500/50' 
+                      : 'bg-slate-800/50 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  <Brain className="w-4 h-4" />
+                  <span>Análisis Automático ({analysisResults.length})</span>
+                </button>
+                <button
+                  onClick={() => setShowAnalysisResults(false)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    !showAnalysisResults 
+                      ? 'bg-gradient-to-r from-[#FF6B00]/30 to-[#00E5FF]/30 text-white border border-white/30' 
+                      : 'bg-slate-800/50 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Evaluación Manual</span>
+                </button>
               </div>
-              
-              <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'B' ? 'border-[#00E5FF]/50 bg-[#00E5FF]/10' : 'border-slate-700'}`}>
-                <p className="text-[#00E5FF] text-sm font-medium mb-1">{scoringResult.teamBName}</p>
-                <p className="text-3xl font-bold text-white">{scoringResult.teamBScore.totalScore}</p>
+            )}
+            
+            {/* Puntuaciones del Análisis Automático */}
+            {showAnalysisResults && analysisResults.length > 0 ? (
+              <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30 rounded-2xl p-6 mb-6">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Brain className="w-6 h-6 text-purple-400" />
+                  <h2 className="text-xl font-bold text-white">Resultados del Análisis Automático</h2>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto mb-6">
+                  <div className={`p-4 rounded-xl border-2 ${
+                    getTeamScoreFromAnalysis('A') > getTeamScoreFromAnalysis('B') 
+                      ? 'border-[#FF6B00]/50 bg-[#FF6B00]/10' 
+                      : 'border-slate-700'
+                  }`}>
+                    <p className="text-[#FF6B00] text-sm font-medium mb-1">{scoringResult.teamAName}</p>
+                    <p className="text-3xl font-bold text-white">{getTeamScoreFromAnalysis('A')}</p>
+                    <p className="text-slate-400 text-xs mt-1">Basado en {analysisResults.filter(r => r.postura === 'A Favor').length} intervenciones</p>
+                  </div>
+                  
+                  <div className={`p-4 rounded-xl border-2 ${
+                    getTeamScoreFromAnalysis('B') > getTeamScoreFromAnalysis('A') 
+                      ? 'border-[#00E5FF]/50 bg-[#00E5FF]/10' 
+                      : 'border-slate-700'
+                  }`}>
+                    <p className="text-[#00E5FF] text-sm font-medium mb-1">{scoringResult.teamBName}</p>
+                    <p className="text-3xl font-bold text-white">{getTeamScoreFromAnalysis('B')}</p>
+                    <p className="text-slate-400 text-xs mt-1">Basado en {analysisResults.filter(r => r.postura === 'En Contra').length} intervenciones</p>
+                  </div>
+                </div>
+                
+                {/* Lista detallada de resultados */}
+                <div className="space-y-3">
+                  {analysisResults.map((result, index) => (
+                    <div 
+                      key={index} 
+                      className={`p-4 rounded-xl border ${
+                        result.postura === 'A Favor' 
+                          ? 'bg-[#FF6B00]/5 border-[#FF6B00]/20' 
+                          : 'bg-[#00E5FF]/5 border-[#00E5FF]/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-semibold ${
+                            result.postura === 'A Favor' ? 'text-[#FF6B00]' : 'text-[#00E5FF]'
+                          }`}>
+                            {result.postura === 'A Favor' ? scoringResult.teamAName : scoringResult.teamBName}
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="text-slate-300 text-sm capitalize">{result.fase}</span>
+                        </div>                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-bold text-white">{result.total}</span>
+                          <span className="text-slate-400 text-sm">/ {result.max_total}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Criterios */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        {result.criterios.map((criterio, cIndex) => (
+                          <div key={cIndex} className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1">
+                            <span className="text-slate-400 truncate mr-2">{criterio.criterio}</span>
+                            <span className={`font-medium ${
+                              criterio.nota >= 4 ? 'text-green-400' : 
+                              criterio.nota >= 3 ? 'text-[#00E5FF]' : 
+                              criterio.nota >= 2 ? 'text-yellow-400' : 'text-[#FF6B00]'
+                            }`}>
+                              {criterio.nota}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
+                  <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'A' ? 'border-[#FF6B00]/50 bg-[#FF6B00]/10' : 'border-slate-700'}`}>
+                    <p className="text-[#FF6B00] text-sm font-medium mb-1">{scoringResult.teamAName}</p>
+                    <p className="text-3xl font-bold text-white">{scoringResult.teamAScore.totalScore}</p>
+                  </div>
+                  
+                  <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'B' ? 'border-[#00E5FF]/50 bg-[#00E5FF]/10' : 'border-slate-700'}`}>
+                    <p className="text-[#00E5FF] text-sm font-medium mb-1">{scoringResult.teamBName}</p>
+                    <p className="text-3xl font-bold text-white">{scoringResult.teamBScore.totalScore}</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
+          {/* Sección de Rúbrica Manual - Solo mostrar si no estamos viendo resultados automáticos */}
+          {(!showAnalysisResults || analysisResults.length === 0) && (
           <div className="space-y-4">
             {DEBATE_RUBRIC.map((section) => (
               <div key={section.roundType} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
@@ -389,6 +504,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
               </div>
             ))}
           </div>
+          )}
 
           <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">

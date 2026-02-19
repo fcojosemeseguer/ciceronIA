@@ -10,6 +10,7 @@ import {
   DebateConfig,
   TeamPosition,
   AudioRecording,
+  AnalysisResult,
 } from '../types';
 import {
   generateDebateRounds,
@@ -30,7 +31,7 @@ const defaultConfig: DebateConfig = {
   },
 };
 
-const createInitialState = (config: DebateConfig): DebateSessionState => ({
+const createInitialState = (config: DebateConfig): DebateSessionState & { analysisResults: AnalysisResult[]; analysisQueue: { recordingId: string; status: 'pending' | 'analyzing' | 'completed' | 'error' }[] } => ({
   config,
   state: 'setup',
   currentRoundIndex: 0,
@@ -38,9 +39,15 @@ const createInitialState = (config: DebateConfig): DebateSessionState => ({
   timeRemaining: config.roundDurations.introduccion,
   isTimerRunning: false,
   recordings: [],
+  analysisResults: [],
+  analysisQueue: [],
 });
 
 interface DebateStore extends DebateSessionState {
+  // Estado de análisis en tiempo real
+  analysisResults: AnalysisResult[];
+  analysisQueue: { recordingId: string; status: 'pending' | 'analyzing' | 'completed' | 'error' }[];
+  
   // Inicialización
   initializeDebate: (config: DebateConfig) => void;
 
@@ -63,6 +70,13 @@ interface DebateStore extends DebateSessionState {
   // Grabaciones
   addRecording: (recording: AudioRecording) => void;
   getRecordings: () => AudioRecording[];
+
+  // Análisis en tiempo real
+  addAnalysisResult: (result: AnalysisResult) => void;
+  getAnalysisResults: () => AnalysisResult[];
+  getTeamScoreFromAnalysis: (team: TeamPosition) => number;
+  addToAnalysisQueue: (recordingId: string) => void;
+  updateAnalysisQueueStatus: (recordingId: string, status: 'pending' | 'analyzing' | 'completed' | 'error') => void;
 
    // Getters
    getCurrentRound: () => ReturnType<typeof getCurrentRoundInfo>;
@@ -91,6 +105,8 @@ export const useDebateStore = create<DebateStore>()(
         timeRemaining: config.roundDurations.introduccion,
         isTimerRunning: false,
         recordings: [],
+        analysisResults: [],
+        analysisQueue: [],
       });
     },
 
@@ -253,6 +269,49 @@ export const useDebateStore = create<DebateStore>()(
 
     getRecordings: () => {
       return get().recordings;
+    },
+
+    // Análisis en tiempo real
+    addAnalysisResult: (result: AnalysisResult) => {
+      const state = get();
+      set({ analysisResults: [...state.analysisResults, result] });
+    },
+
+    getAnalysisResults: () => {
+      return get().analysisResults;
+    },
+
+    getTeamScoreFromAnalysis: (team: TeamPosition) => {
+      const state = get();
+      const postura = team === 'A' ? 'A Favor' : 'En Contra';
+      
+      const teamResults = state.analysisResults.filter(
+        result => result.postura === postura
+      );
+
+      if (teamResults.length === 0) return 0;
+
+      const totalScore = teamResults.reduce((sum, result) => sum + result.total, 0);
+      return Math.round(totalScore / teamResults.length);
+    },
+
+    addToAnalysisQueue: (recordingId: string) => {
+      const state = get();
+      set({
+        analysisQueue: [
+          ...state.analysisQueue,
+          { recordingId, status: 'pending' }
+        ]
+      });
+    },
+
+    updateAnalysisQueueStatus: (recordingId: string, status: 'pending' | 'analyzing' | 'completed' | 'error') => {
+      const state = get();
+      set({
+        analysisQueue: state.analysisQueue.map(item =>
+          item.recordingId === recordingId ? { ...item, status } : item
+        )
+      });
     },
 
     // Getters
