@@ -340,6 +340,58 @@ def get_project_share_link_by_token_hash(token_hash: str):
         return None
 
 
+def get_project_chat_human_messages(project_code: str) -> list[str]:
+    """
+    Devuelve los prompts 'human' guardados en chat_history para un proyecto.
+    Se usa como fallback para reconstruir transcripción/métricas en dashboards legacy.
+    """
+    try:
+        chat_history_table = db.table('chat_history')
+        session = chat_history_table.get(User.project_id == project_code)
+        if not session:
+            return []
+
+        messages = session.get("messages", [])
+        human_prompts = []
+        for msg in messages:
+            if msg.get("type") != "human":
+                continue
+            data = msg.get("data", {})
+            content = data.get("content")
+            if isinstance(content, str) and content.strip():
+                human_prompts.append(content)
+        return human_prompts
+    except Exception as e:
+        print(f"error {e}")
+        return []
+
+
+def get_project_chat_ai_messages(project_code: str) -> list[str]:
+    """
+    Devuelve las respuestas 'ai' guardadas en chat_history para un proyecto.
+    Se usa como fallback para recuperar feedback/recomendaciones en dashboards legacy.
+    """
+    try:
+        chat_history_table = db.table('chat_history')
+        session = chat_history_table.get(User.project_id == project_code)
+        if not session:
+            return []
+
+        messages = session.get("messages", [])
+        ai_messages = []
+        for msg in messages:
+            if msg.get("type") != "ai":
+                continue
+            data = msg.get("data", {})
+            content = data.get("content")
+            if isinstance(content, str) and content.strip():
+                ai_messages.append(content)
+        return ai_messages
+    except Exception as e:
+        print(f"error {e}")
+        return []
+
+
 def check_team(project_code, team) -> bool:
     try:
         result = teams_table.search(

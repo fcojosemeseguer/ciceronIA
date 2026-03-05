@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
+import json
 import os
 import secrets
 import shutil
@@ -35,6 +36,8 @@ from app.core.database import (
     get_project_debate_type,
     get_project_for_user,
     get_project_segments,
+    get_project_chat_human_messages,
+    get_project_chat_ai_messages,
     get_project_share_link_by_token_hash,
     get_projects,
     get_projects_paginated,
@@ -220,10 +223,17 @@ def _prepare_segments_for_response(
             "created_at": segment.get("created_at"),
         }
 
-        if include_transcript:
-            item["transcript"] = segment.get("transcript", [])
-        else:
-            item["transcript_preview"] = segment.get("transcript_preview", "")
+        transcript_full = segment.get("transcript", [])
+        transcript_preview = segment.get("transcript_preview", "")
+
+        # Si hay transcripción completa, exponerla siempre para evitar perder contenido
+        # en flujos legacy donde solo se mostraba transcript_preview.
+        if transcript_full:
+            item["transcript"] = transcript_full
+        elif include_transcript:
+            item["transcript"] = []
+
+        item["transcript_preview"] = transcript_preview
 
         if include_metrics:
             item["metrics_raw"] = segment.get("metrics_raw", {})
@@ -231,6 +241,152 @@ def _prepare_segments_for_response(
         prepared.append(item)
 
     return prepared
+
+
+def _to_fase_id(value: str) -> str:
+    return _normalize_text(value).replace(" ", "_")
+
+
+def _build_legacy_segments(
+    project: dict,
+    fase: str | None,
+    postura: str | None,
+    orador: str | None,
+) -> list[dict]:
+    legacy_items = get_project(
+        {"user_code": project.get("user_code"), "project_code": project["code"]}
+    ) or []
+    legacy_prompts = get_project_chat_human_messages(project["code"])
+    legacy_ai_messages = get_project_chat_ai_messages(project["code"])
+
+    def _extract_between(text: str, start: str, end: str) -> str:
+        start_idx = text.find(start)
+        if start_idx == -1:
+            return ""
+        start_idx += len(start)
+        end_idx = text.find(end, start_idx)
+        if end_idx == -1:
+            end_idx = len(text)
+        return text[start_idx:end_idx].strip()
+
+    def _parse_legacy_prompt(prompt: str) -> tuple[list[dict], dict]:
+        transcript_raw = _extract_between(
+            prompt,
+            "TRANSCRIPCIÓN:",
+            "MÉTRICAS PARALINGÜÍSTICAS:",
+        )
+        metrics_raw = _extract_between(
+            prompt,
+            "MÉTRICAS PARALINGÜÍSTICAS:",
+            "FORMATO DE RESPUESTA REQUERIDO:",
+        )
+
+        transcript_items: list[dict] = []
+        for line in transcript_raw.splitlines():
+            line = line.strip()
+            if not line.startswith("["):
+                continue
+            try:
+                # Format: [0.00s - 4.12s] SPEAKER_00: text
+                time_part, payload = line.split("] ", 1)
+                speaker, text = payload.split(": ", 1)
+                start_end = time_part[1:].replace("s", "").split(" - ")
+                transcript_items.append(
+                    {
+                        "start": float(start_end[0]),
+                        "end": float(start_end[1]),
+                        "speaker": speaker.strip(),
+                        "text": text.strip(),
+                    }
+                )
+            except Exception:
+                continue
+
+        parsed_metrics: dict[str, dict] = {}
+        current_speaker = None
+        for line in metrics_raw.splitlines():
+            line = line.strip()
+            if line.startswith("Métricas de ") and line.endswith(":"):
+                current_speaker = line[len("Métricas de "): -1].strip()
+                parsed_metrics[current_speaker] = {}
+                continue
+            if not current_speaker:
+                continue
+            if line.startswith("- ") and ": " in line:
+                metric_name, metric_value = line[2:].split(": ", 1)
+                try:
+                    parsed_metrics[current_speaker][metric_name.strip()] = float(metric_value)
+                except ValueError:
+                    parsed_metrics[current_speaker][metric_name.strip()] = metric_value.strip()
+
+        return transcript_items, parsed_metrics
+
+    def _matches_filter(item: dict) -> bool:
+        if fase:
+            fase_item = str(item.get("fase", ""))
+            if _normalize_text(fase_item) != _normalize_text(fase):
+                return False
+        if postura:
+            postura_item = str(item.get("postura", ""))
+            if _normalize_text(postura_item) != _normalize_text(postura):
+                return False
+        if orador:
+            orador_item = str(item.get("orador", ""))
+            if _normalize_text(orador_item) != _normalize_text(orador):
+                return False
+        return True
+
+    filtered = [(idx, item) for idx, item in enumerate(legacy_items) if _matches_filter(item)]
+    built = []
+    for idx, item in filtered:
+        total = item.get("total", 0)
+        max_total = item.get("max_total", 0)
+        score_percent = round((total / max_total) * 100, 2) if max_total else 0.0
+        fase_nombre = item.get("fase", "Unknown")
+        transcript_items: list[dict] = []
+        metrics_items: dict = {}
+        if idx < len(legacy_prompts):
+            transcript_items, metrics_items = _parse_legacy_prompt(legacy_prompts[idx])
+
+        transcript_preview = _build_transcript_preview(transcript_items) if transcript_items else ""
+        recommendation = None
+        if idx < len(legacy_ai_messages):
+            try:
+                ai_payload = json.loads(legacy_ai_messages[idx])
+                recommendation = (
+                    ai_payload.get("feedback")
+                    or ai_payload.get("feedback_equipo")
+                    or ai_payload.get("justificacion_mejor_orador")
+                )
+            except Exception:
+                recommendation = None
+
+        built.append(
+            {
+                "segment_id": f"legacy-{project['code']}-{idx}",
+                "project_code": project["code"],
+                "debate_type": item.get("debate_type", project.get("debate_type", "upct")),
+                "fase_id": _to_fase_id(fase_nombre),
+                "fase_nombre": fase_nombre,
+                "postura": item.get("postura", "Unknown"),
+                "orador": item.get("orador", "Unknown"),
+                "num_speakers": None,
+                "duration_seconds": None,
+                "analysis": {
+                    "criterios": item.get("criterios", []),
+                    "total": total,
+                    "max_total": max_total,
+                    "score_percent": score_percent,
+                    "recommendation": recommendation,
+                },
+                "metrics_summary": _build_metrics_summary(metrics_items),
+                "metrics_raw": metrics_items,
+                "transcript_preview": transcript_preview,
+                "transcript": transcript_items,
+                "created_at": "",
+            }
+        )
+    return built
 
 
 def _build_dashboard_payload(
@@ -260,18 +416,33 @@ def _build_dashboard_payload(
         offset=offset,
     )
 
+    all_items = filtered_all["items"]
+    paged_items = filtered_page["items"]
+    total_items = filtered_page["total"]
+    limit_items = filtered_page["limit"]
+    offset_items = filtered_page["offset"]
+
+    # Backward compatibility for projects analyzed before project_segments existed.
+    if not all_items:
+        legacy_segments = _build_legacy_segments(project, fase, postura, orador)
+        total_items = len(legacy_segments)
+        all_items = legacy_segments
+        paged_items = legacy_segments[offset: offset + limit]
+        limit_items = limit
+        offset_items = offset
+
     return {
         "project": project,
-        "summary": build_project_dashboard_summary(filtered_all["items"]),
+        "summary": build_project_dashboard_summary(all_items),
         "segments": {
             "items": _prepare_segments_for_response(
-                filtered_page["items"],
+                paged_items,
                 include_transcript=include_transcript,
                 include_metrics=include_metrics,
             ),
-            "total": filtered_page["total"],
-            "limit": filtered_page["limit"],
-            "offset": filtered_page["offset"],
+            "total": total_items,
+            "limit": limit_items,
+            "offset": offset_items,
         },
     }
 
@@ -784,7 +955,7 @@ async def public_dashboard(
         orador=orador,
         limit=limit,
         offset=offset,
-        include_transcript=share_link.get("allow_full_transcript", False),
+        include_transcript=True,
         include_metrics=share_link.get("allow_raw_metrics", False),
     )
 
