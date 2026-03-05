@@ -1,24 +1,64 @@
-from app.core.database import (
-    create_user, check_user, get_user_code, create_project,
-    create_analysis, get_projects, get_project, get_project_debate_type, save_metrics, save_transcription
-)
-from app.api.v1.models import CredsInput, NewProjectInfo, AnalyseData, QuickAnalyseData, AuthData, AuthDataProject
-from app.processors.pipeline import create_chat, DebateFase, Postura
-from app.services.metrics import process_complete_analysis
-from data.debate_types import get_debate_type, list_debate_types, DEFAULT_DEBATE_TYPE
-
-from fastapi import APIRouter, File, UploadFile, HTTPException, status, Depends
-import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import hashlib
+import os
+import secrets
+import shutil
+import time
+import unicodedata
+from uuid import uuid4
+
 import jwt
 from dotenv import load_dotenv
-from pathlib import Path
-import shutil
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+
+from app.api.v1.models import (
+    AnalyseData,
+    AuthDataProject,
+    AuthDataProjects,
+    CredsInput,
+    NewProjectInfo,
+    QuickAnalyseData,
+    ShareLinkCreateData,
+)
+from app.core.database import (
+    build_project_dashboard_summary,
+    check_user,
+    create_analysis,
+    create_project,
+    create_project_segment,
+    create_project_share_link,
+    create_user,
+    get_project,
+    get_project_by_code,
+    get_project_debate_type,
+    get_project_for_user,
+    get_project_segments,
+    get_project_share_link_by_token_hash,
+    get_projects,
+    get_projects_paginated,
+    get_user_code,
+    list_project_share_links,
+    revoke_project_share_link,
+    save_metrics,
+    save_transcription,
+)
+from app.processors.pipeline import DebateFase, Postura, create_chat
+from app.services.metrics import process_complete_analysis
+from data.debate_types import get_debate_type, list_debate_types
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+DEPRECATION_SUNSET = "Wed, 30 Sep 2026 23:59:59 GMT"
+DEFAULT_SHARE_LINK_DAYS = 30
+
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 60
+_public_dashboard_rate_limit: dict[str, list[float]] = {}
 
 UPLOAD_DIR = Path("uploads/audios")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,102 +67,297 @@ router = APIRouter()
 
 chats = {}
 
-# Backward-compatible maps for UPCT (used as fallback)
-_upct_fases = {
-    "Introducción": DebateFase.INTRO,
-    "Refutación 1": DebateFase.REF1,
-    "Refutación 2": DebateFase.REF2,
-    "Conclusión": DebateFase.CONCLUSION,
-    "Final": DebateFase.FINAL
+upct_phase_enum_by_id = {
+    "introduccion": DebateFase.INTRO,
+    "refutacion_1": DebateFase.REF1,
+    "refutacion_2": DebateFase.REF2,
+    "conclusion": DebateFase.CONCLUSION,
+    "final": DebateFase.FINAL,
 }
 
-_upct_posturas = {
+upct_postura_enum_by_value = {
     "A Favor": Postura.FAVOR,
-    "En Contra": Postura.CONTRA
+    "En Contra": Postura.CONTRA,
 }
 
-key_metrics_names = [
-    "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",  # Expresividad
-    "loudness_sma3_amean",                     # Proyección
-    "loudness_sma3_stddevNorm",                # Énfasis
-    "loudnessPeaksPerSec",                     # Velocidad
-    "VoicedSegmentsPerSec",                    # Ritmo
-    "MeanUnvoicedSegmentLength",               # Silencios
-    "jitterLocal_sma3nz_amean",                # Seguridad (Jitter)
-    "shimmerLocaldB_sma3nz_amean"              # Seguridad (Shimmer)
+KEY_METRICS_NAMES = [
+    "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",
+    "loudness_sma3_amean",
+    "loudness_sma3_stddevNorm",
+    "loudnessPeaksPerSec",
+    "VoicedSegmentsPerSec",
+    "MeanUnvoicedSegmentLength",
+    "jitterLocal_sma3nz_amean",
+    "shimmerLocaldB_sma3nz_amean",
 ]
 
 
+def _normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = "".join(c for c in normalized if not unicodedata.combining(c))
+    return " ".join(ascii_value.lower().strip().split())
+
+
+def _extract_bearer_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="invalid authorization header")
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    return token
+
+
+def _decode_access_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="token expired") from exc
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="invalid token") from exc
+
+
+def _resolve_auth_payload(request: Request, response: Response, legacy_jwt: str | None) -> dict:
+    bearer_token = _extract_bearer_token(request)
+    if bearer_token:
+        return _decode_access_token(bearer_token)
+
+    if legacy_jwt:
+        response.headers["Deprecation"] = "true"
+        response.headers["Sunset"] = DEPRECATION_SUNSET
+        return _decode_access_token(legacy_jwt)
+
+    raise HTTPException(status_code=401, detail="missing authentication token")
+
+
+def _resolve_project_ownership_or_fail(user_code: str, project_code: str) -> dict:
+    owned_project = get_project_for_user(user_code, project_code)
+    if owned_project:
+        return owned_project
+
+    any_project = get_project_by_code(project_code)
+    if any_project:
+        raise HTTPException(status_code=403, detail="forbidden project access")
+    raise HTTPException(status_code=404, detail="project not found")
+
+
+def _resolve_phase_config_or_422(debate_config, fase_input: str):
+    fase_cfg = debate_config.get_fase_by_id(fase_input)
+    if fase_cfg is not None:
+        return fase_cfg
+
+    fase_cfg = debate_config.get_fase_by_nombre(fase_input)
+    if fase_cfg is not None:
+        return fase_cfg
+
+    normalized_input = _normalize_text(fase_input)
+    for candidate in debate_config.fases:
+        if normalized_input in {_normalize_text(candidate.id), _normalize_text(candidate.nombre)}:
+            return candidate
+
+    valid_options = [f.id for f in debate_config.fases] + [f.nombre for f in debate_config.fases]
+    raise HTTPException(
+        status_code=422,
+        detail=f"invalid fase '{fase_input}'. valid values: {valid_options}",
+    )
+
+
+def _resolve_postura_or_422(debate_config, postura_input: str) -> str:
+    valid_posturas = debate_config.get_posturas_validas()
+    if postura_input in valid_posturas:
+        return postura_input
+
+    normalized_input = _normalize_text(postura_input)
+    for postura in valid_posturas:
+        if normalized_input == _normalize_text(postura):
+            return postura
+
+    raise HTTPException(
+        status_code=422,
+        detail=f"invalid postura '{postura_input}'. valid values: {valid_posturas}",
+    )
+
+
+def _build_metrics_summary(metrics: dict) -> dict:
+    summary = {}
+    for speaker, speaker_metrics in metrics.items():
+        summary[speaker] = {
+            metric_name: speaker_metrics.get(metric_name)
+            for metric_name in KEY_METRICS_NAMES
+            if metric_name in speaker_metrics
+        }
+    return summary
+
+
+def _build_transcript_preview(transcription: list[dict], max_len: int = 280) -> str:
+    full_text = " ".join(seg.get("text", "") for seg in transcription).strip()
+    if len(full_text) <= max_len:
+        return full_text
+    return full_text[:max_len].rstrip() + "..."
+
+
+def _prepare_segments_for_response(
+    segments: list[dict],
+    include_transcript: bool,
+    include_metrics: bool,
+) -> list[dict]:
+    prepared = []
+    for segment in segments:
+        item = {
+            "segment_id": segment.get("segment_id"),
+            "project_code": segment.get("project_code"),
+            "debate_type": segment.get("debate_type"),
+            "fase_id": segment.get("fase_id"),
+            "fase_nombre": segment.get("fase_nombre"),
+            "postura": segment.get("postura"),
+            "orador": segment.get("orador"),
+            "num_speakers": segment.get("num_speakers"),
+            "duration_seconds": segment.get("duration_seconds"),
+            "analysis": segment.get("analysis", {}),
+            "metrics_summary": segment.get("metrics_summary", {}),
+            "created_at": segment.get("created_at"),
+        }
+
+        if include_transcript:
+            item["transcript"] = segment.get("transcript", [])
+        else:
+            item["transcript_preview"] = segment.get("transcript_preview", "")
+
+        if include_metrics:
+            item["metrics_raw"] = segment.get("metrics_raw", {})
+
+        prepared.append(item)
+
+    return prepared
+
+
+def _build_dashboard_payload(
+    project: dict,
+    fase: str | None,
+    postura: str | None,
+    orador: str | None,
+    limit: int,
+    offset: int,
+    include_transcript: bool,
+    include_metrics: bool,
+) -> dict:
+    filtered_all = get_project_segments(
+        project_code=project["code"],
+        fase=fase,
+        postura=postura,
+        orador=orador,
+        limit=100000,
+        offset=0,
+    )
+    filtered_page = get_project_segments(
+        project_code=project["code"],
+        fase=fase,
+        postura=postura,
+        orador=orador,
+        limit=limit,
+        offset=offset,
+    )
+
+    return {
+        "project": project,
+        "summary": build_project_dashboard_summary(filtered_all["items"]),
+        "segments": {
+            "items": _prepare_segments_for_response(
+                filtered_page["items"],
+                include_transcript=include_transcript,
+                include_metrics=include_metrics,
+            ),
+            "total": filtered_page["total"],
+            "limit": filtered_page["limit"],
+            "offset": filtered_page["offset"],
+        },
+    }
+
+
+def _enforce_public_rate_limit(request: Request) -> None:
+    source = request.client.host if request.client else "unknown"
+    now = time.time()
+    previous = _public_dashboard_rate_limit.get(source, [])
+    alive = [ts for ts in previous if now - ts <= RATE_LIMIT_WINDOW_SECONDS]
+
+    if len(alive) >= RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail="rate limit exceeded for public dashboard",
+        )
+
+    alive.append(now)
+    _public_dashboard_rate_limit[source] = alive
+
+
 @router.post("/status")
-async def status():
+async def status_check():
     return {"message": "ciceron is running"}
 
 
 @router.get("/debate-types")
 async def get_debate_types():
-    """Lista todos los tipos de debate disponibles con info resumida."""
     return {"debate_types": list_debate_types()}
 
 
 @router.post("/login")
 async def login(data: CredsInput):
     creds = {"user": data.user, "pswd": data.pswd}
+    if not check_user(creds):
+        raise HTTPException(status_code=401, detail="incorrect login")
+
     user_code = get_user_code(creds)
-    if check_user(creds):
-        expire = datetime.now(timezone.utc) + \
-            timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        payload = {
-            "sub": data.user,  # El "sujeto" del token
-            "exp": expire,     # Fecha de expiración
-            "user_code": user_code
-        }
-        token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-        return {
-            "message": "login done!",
-            "access_token": token,
-            "token_type": "bearer",
-            "user": data.user
-        }
-    else:
-        raise HTTPException(401, "incorrect login")
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": data.user,
+        "exp": expire,
+        "user_code": user_code,
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return {
+        "message": "login done!",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": data.user,
+    }
 
 
 @router.post("/register")
 async def register(data: CredsInput):
     creds = {"user": data.user, "pswd": data.pswd}
-    if create_user(creds):
-        user_code = get_user_code(creds)
-        expire = datetime.now(timezone.utc) + \
-            timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        payload = {
-            "sub": data.user,  # El "sujeto" del token
-            "exp": expire,     # Fecha de expiración
-            "user_code": user_code
-        }
-        token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-        return {
-            "message": "register done!",
-            "access_token": token,
-            "token_type": "bearer",
-            "user": data.user
-        }
-    else:
-        raise HTTPException(400, "incorrect register")
+    if not create_user(creds):
+        raise HTTPException(status_code=400, detail="incorrect register")
+
+    user_code = get_user_code(creds)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": data.user,
+        "exp": expire,
+        "user_code": user_code,
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return {
+        "message": "register done!",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": data.user,
+    }
 
 
 @router.post("/new-project")
-async def newproject(data: NewProjectInfo):
+async def newproject(data: NewProjectInfo, request: Request, response: Response):
+    payload = _resolve_auth_payload(request, response, data.jwt)
+    user_code = payload["user_code"]
+
     try:
-        payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
-        user_code = payload["user_code"]
+        get_debate_type(data.debate_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        # Validar que el tipo de debate existe
-        try:
-            get_debate_type(data.debate_type)
-        except ValueError as e:
-            raise HTTPException(400, detail=str(e))
-
-        project_code = create_project({
+    project_code = create_project(
+        {
             "name": data.name,
             "desc": data.description,
             "user_code": user_code,
@@ -130,147 +365,151 @@ async def newproject(data: NewProjectInfo):
             "team_a_name": data.team_a_name,
             "team_b_name": data.team_b_name,
             "debate_topic": data.debate_topic,
-        })
-        if project_code is not None:
-            return {
-                "message": "project created",
-                "project_code": project_code,
-                "debate_type": data.debate_type,
-                "team_a_name": data.team_a_name,
-                "team_b_name": data.team_b_name,
-                "debate_topic": data.debate_topic,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, detail=str(e))
+        }
+    )
+    if project_code is None:
+        raise HTTPException(status_code=500, detail="project creation failed")
+
+    return {
+        "message": "project created",
+        "project_code": project_code,
+        "debate_type": data.debate_type,
+        "team_a_name": data.team_a_name,
+        "team_b_name": data.team_b_name,
+        "debate_topic": data.debate_topic,
+    }
 
 
 @router.post("/analyse")
-async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
+async def analyse(
+    request: Request,
+    response: Response,
+    data: AnalyseData = Depends(AnalyseData.as_form),
+):
     file_path = None
+
+    payload = _resolve_auth_payload(request, response, data.jwt)
+    user_code = payload["user_code"]
+    project = _resolve_project_ownership_or_fail(user_code, data.project_code)
+
+    debate_type_id = get_project_debate_type(project["code"])
     try:
-        project_code = data.project_code
+        debate_config = get_debate_type(debate_type_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        # Obtener tipo de debate del proyecto
-        debate_type_id = get_project_debate_type(project_code)
-        try:
-            debate_config = get_debate_type(debate_type_id)
-        except ValueError:
-            raise HTTPException(
-                400, detail=f"Project has invalid debate type: {debate_type_id}")
+    fase_cfg = _resolve_phase_config_or_422(debate_config, data.fase)
+    postura_str = _resolve_postura_or_422(debate_config, data.postura)
 
-        # Validar fase contra la config del tipo de debate
-        fase_nombre = data.fase
-        fase_config = debate_config.get_fase_by_nombre(fase_nombre)
-        if fase_config is None:
-            # Intentar buscar por id
-            fase_config = debate_config.get_fase_by_id(fase_nombre)
-        if fase_config is None:
-            fases_validas = [f.nombre for f in debate_config.fases]
-            raise ValueError(
-                f"'{fase_nombre}' is not a valid phase for {debate_type_id}. "
-                f"Valid phases: {fases_validas}"
-            )
-
-        # Validar postura
-        postura_str = data.postura
-        if postura_str not in debate_config.get_posturas_validas():
-            raise ValueError(
-                f"'{postura_str}' is not valid. "
-                f"Valid options: {debate_config.get_posturas_validas()}"
-            )
-
-        orador = data.orador
-        num_speakers = data.num_speakers
-
-        file_name = f"{abs(hash(f'{project_code}-{data.fase}-{data.postura}'))}.wav"
+    try:
+        file_name = f"{uuid4()}.wav"
         file_path = UPLOAD_DIR / file_name
-
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(data.file.file, buffer)
         await data.file.close()
 
-        # Crear o recuperar ChatSession con la config del tipo de debate
-        if chats.get(project_code) is None:
-            chat = create_chat(
-                project_code, project_code,
-                debate_type_config=debate_config
+        if chats.get(project["code"]) is None:
+            chats[project["code"]] = create_chat(
+                project["code"],
+                project["code"],
+                debate_type_config=debate_config,
             )
-            chats[project_code] = chat
-        else:
-            chat = chats[project_code]
+        chat = chats[project["code"]]
 
-        analysis_data = process_complete_analysis(
-            str(file_path), num_speakers=num_speakers)
-
+        analysis_data = process_complete_analysis(str(file_path), num_speakers=data.num_speakers)
         transcription = analysis_data["transcript"]
         metrics = analysis_data["metrics"]
 
         save_transcription(str(file_path), transcription, "")
         save_metrics(str(file_path), metrics)
+
+        duracion = None
         if transcription:
             duracion = transcription[-1]["end"] - transcription[0]["start"]
-        else:
-            duracion = None
 
-        # Para UPCT: pasar enums (retrocompatibilidad). Para otros: pasar strings.
-        if debate_type_id == "upct" and fase_nombre in _upct_fases:
-            fase_arg = _upct_fases[fase_nombre]
-            postura_arg = _upct_posturas[postura_str]
+        if debate_type_id == "upct" and fase_cfg.id in upct_phase_enum_by_id:
+            fase_arg = upct_phase_enum_by_id[fase_cfg.id]
+            postura_arg = upct_postura_enum_by_value[postura_str]
         else:
-            fase_arg = fase_nombre
+            fase_arg = fase_cfg.id
             postura_arg = postura_str
 
         resultado = chat.send_evaluation(
             fase=fase_arg,
             postura=postura_arg,
-            orador=orador,
+            orador=data.orador,
             transcripcion=transcription,
             metricas=metrics,
-            duracion_segundos=duracion
+            duracion_segundos=duracion,
         )
 
         criterios = []
         total = 0
         for criterio, nota in resultado.puntuaciones.items():
             anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append({
-                "criterio": criterio,
-                "nota": nota,
-                "anotacion": anotacion
-            })
+            criterios.append({"criterio": criterio, "nota": nota, "anotacion": anotacion})
             total += nota
 
         max_total = len(resultado.puntuaciones) * debate_config.escala_max
+        score_percent = round((total / max_total) * 100, 2) if max_total > 0 else 0.0
 
-        if create_analysis({
-            "fase": resultado.fase,
-            "postura": resultado.postura,
-            "orador": resultado.orador,
-            "criterios": criterios,
-            "total": total,
-            "max_total": max_total,
-            "project_code": project_code,
-            "debate_type": debate_type_id,
-        }):
-            return {
-                "message": "analysis succeeded!",
+        if not create_analysis(
+            {
                 "fase": resultado.fase,
                 "postura": resultado.postura,
                 "orador": resultado.orador,
                 "criterios": criterios,
                 "total": total,
                 "max_total": max_total,
+                "project_code": project["code"],
                 "debate_type": debate_type_id,
             }
-        else:
-            raise RuntimeError("error while saving data")
+        ):
+            raise HTTPException(status_code=500, detail="error while saving legacy analysis")
 
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            500, detail=f"error while analysing {e}")
+        segment_payload = {
+            "segment_id": str(uuid4()),
+            "project_code": project["code"],
+            "user_code": user_code,
+            "debate_type": debate_type_id,
+            "fase_id": fase_cfg.id,
+            "fase_nombre": fase_cfg.nombre,
+            "postura": postura_str,
+            "orador": data.orador,
+            "num_speakers": data.num_speakers,
+            "duration_seconds": duracion,
+            "transcript": transcription,
+            "transcript_preview": _build_transcript_preview(transcription),
+            "metrics_summary": _build_metrics_summary(metrics),
+            "metrics_raw": metrics,
+            "analysis": {
+                "criterios": criterios,
+                "total": total,
+                "max_total": max_total,
+                "score_percent": score_percent,
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if not create_project_segment(segment_payload):
+            raise HTTPException(status_code=500, detail="error while saving project segment")
+
+        return {
+            "message": "analysis succeeded!",
+            "fase": fase_cfg.nombre,
+            "fase_id": fase_cfg.id,
+            "postura": resultado.postura,
+            "orador": resultado.orador,
+            "criterios": criterios,
+            "total": total,
+            "max_total": max_total,
+            "score_percent": score_percent,
+            "debate_type": debate_type_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"error while analysing {exc}") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
@@ -278,159 +517,279 @@ async def analyse(data: AnalyseData = Depends(AnalyseData.as_form)):
 
 @router.post("/quick-analyse")
 async def quick_analyse(data: QuickAnalyseData = Depends(QuickAnalyseData.as_form)):
-    """
-    Análisis rápido sin proyecto asociado.
-    No requiere autenticación. No guarda resultados en BD.
-    El debate_type se pasa directamente en el request (default: upct).
-    """
     file_path = None
+
     try:
-        # Validar tipo de debate
-        debate_type_id = data.debate_type
         try:
-            debate_config = get_debate_type(debate_type_id)
-        except ValueError as e:
-            raise HTTPException(400, detail=str(e))
+            debate_config = get_debate_type(data.debate_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        # Validar fase
-        fase_nombre = data.fase
-        fase_config = debate_config.get_fase_by_nombre(fase_nombre)
-        if fase_config is None:
-            fase_config = debate_config.get_fase_by_id(fase_nombre)
-        if fase_config is None:
-            fases_validas = [f.nombre for f in debate_config.fases]
-            raise ValueError(
-                f"'{fase_nombre}' is not a valid phase for {debate_type_id}. "
-                f"Valid phases: {fases_validas}"
-            )
+        fase_cfg = _resolve_phase_config_or_422(debate_config, data.fase)
+        postura_str = _resolve_postura_or_422(debate_config, data.postura)
 
-        # Validar postura
-        postura_str = data.postura
-        if postura_str not in debate_config.get_posturas_validas():
-            raise ValueError(
-                f"'{postura_str}' is not valid. "
-                f"Valid options: {debate_config.get_posturas_validas()}"
-            )
-
-        orador = data.orador
-        num_speakers = data.num_speakers
-
-        file_name = f"quick_{abs(hash(f'{data.fase}-{data.postura}-{id(data)}'))}.wav"
+        file_name = f"quick_{uuid4()}.wav"
         file_path = UPLOAD_DIR / file_name
-
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(data.file.file, buffer)
         await data.file.close()
 
-        # Crear ChatSession efímera (no se guarda en el dict chats)
         temp_session_id = f"quick_{id(data)}"
-        chat = create_chat(
-            temp_session_id, temp_session_id,
-            debate_type_config=debate_config
-        )
+        chat = create_chat(temp_session_id, temp_session_id, debate_type_config=debate_config)
 
-        analysis_data = process_complete_analysis(
-            str(file_path), num_speakers=num_speakers)
-
+        analysis_data = process_complete_analysis(str(file_path), num_speakers=data.num_speakers)
         transcription = analysis_data["transcript"]
         metrics = analysis_data["metrics"]
 
+        duracion = None
         if transcription:
             duracion = transcription[-1]["end"] - transcription[0]["start"]
-        else:
-            duracion = None
 
-        # Para UPCT: pasar enums. Para otros: strings.
-        if debate_type_id == "upct" and fase_nombre in _upct_fases:
-            fase_arg = _upct_fases[fase_nombre]
-            postura_arg = _upct_posturas[postura_str]
+        if data.debate_type == "upct" and fase_cfg.id in upct_phase_enum_by_id:
+            fase_arg = upct_phase_enum_by_id[fase_cfg.id]
+            postura_arg = upct_postura_enum_by_value[postura_str]
         else:
-            fase_arg = fase_nombre
+            fase_arg = fase_cfg.id
             postura_arg = postura_str
 
         resultado = chat.send_evaluation(
             fase=fase_arg,
             postura=postura_arg,
-            orador=orador,
+            orador=data.orador,
             transcripcion=transcription,
             metricas=metrics,
-            duracion_segundos=duracion
+            duracion_segundos=duracion,
         )
 
         criterios = []
         total = 0
         for criterio, nota in resultado.puntuaciones.items():
             anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append({
-                "criterio": criterio,
-                "nota": nota,
-                "anotacion": anotacion
-            })
+            criterios.append({"criterio": criterio, "nota": nota, "anotacion": anotacion})
             total += nota
 
         max_total = len(resultado.puntuaciones) * debate_config.escala_max
 
-        # Limpiar historial efímero
         chat.clear_history()
-
         return {
             "message": "quick analysis succeeded!",
-            "fase": resultado.fase,
+            "fase": fase_cfg.nombre,
+            "fase_id": fase_cfg.id,
             "postura": resultado.postura,
             "orador": resultado.orador,
             "criterios": criterios,
             "total": total,
             "max_total": max_total,
-            "debate_type": debate_type_id,
+            "debate_type": data.debate_type,
         }
-
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            500, detail=f"error while analysing {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"error while analysing {exc}") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
 
 
 @router.post("/get-projects")
-async def getprojects(data: AuthData):
-    payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
-    result = get_projects({"user_code": payload["user_code"]})
-    if result is None:
-        raise HTTPException(401)
-    else:
-        return {"message": "here are your projects", "result": result}
+async def getprojects(data: AuthDataProjects, request: Request, response: Response):
+    payload = _resolve_auth_payload(request, response, data.jwt)
+
+    # Legacy response is preserved in "result" while adding pagination metadata.
+    legacy_result = get_projects({"user_code": payload["user_code"]})
+    paged = get_projects_paginated(
+        user_code=payload["user_code"],
+        q=data.q,
+        debate_type=data.debate_type,
+        limit=data.limit,
+        offset=data.offset,
+    )
+
+    return {
+        "message": "here are your projects",
+        "result": legacy_result,
+        "items": paged["items"],
+        "total": paged["total"],
+        "limit": paged["limit"],
+        "offset": paged["offset"],
+    }
 
 
 @router.post("/get-project")
-async def getproject(data: AuthDataProject):
-    try:
-        payload = jwt.decode(data.jwt, SECRET_KEY, algorithms=[ALGORITHM])
-        user_code = payload["user_code"]
-        project_code = data.project_code
+async def getproject(data: AuthDataProject, request: Request, response: Response):
+    payload = _resolve_auth_payload(request, response, data.jwt)
+    project = _resolve_project_ownership_or_fail(payload["user_code"], data.project_code)
 
-        # Obtener el proyecto
-        from app.core.database import projects_table, User
-        project = projects_table.get(
-            (User.code == project_code) & (User.user_code == user_code)
+    result = get_project({"user_code": payload["user_code"], "project_code": data.project_code})
+    response_payload = {
+        "message": f"here is project {data.project_code}",
+        "project": project,
+        "content": result,
+    }
+
+    if data.include_segments:
+        dashboard = _build_dashboard_payload(
+            project=project,
+            fase=data.fase,
+            postura=data.postura,
+            orador=data.orador,
+            limit=data.limit,
+            offset=data.offset,
+            include_transcript=data.include_transcript,
+            include_metrics=data.include_metrics,
         )
+        response_payload["dashboard"] = dashboard
 
-        if not project:
-            raise HTTPException(404, "Project not found")
+    return response_payload
 
-        # Obtener los análisis del proyecto
-        result = get_project(
-            {"user_code": user_code, "project_code": project_code})
 
-        return {
-            "message": f"here is project {project_code}",
-            "project": project,
-            "content": result
+@router.post("/projects/{project_code}/share-links")
+async def create_share_link(
+    project_code: str,
+    data: ShareLinkCreateData,
+    request: Request,
+    response: Response,
+):
+    payload = _resolve_auth_payload(request, response, data.jwt)
+    project = _resolve_project_ownership_or_fail(payload["user_code"], project_code)
+
+    now = datetime.now(timezone.utc)
+    expires_at = data.expires_at or (now + timedelta(days=DEFAULT_SHARE_LINK_DAYS))
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at <= now:
+        raise HTTPException(status_code=422, detail="expires_at must be in the future")
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    share_id = str(uuid4())
+
+    created = create_project_share_link(
+        {
+            "share_id": share_id,
+            "project_code": project["code"],
+            "owner_user_code": payload["user_code"],
+            "token_hash": token_hash,
+            "token_prefix": raw_token[:8],
+            "allow_full_transcript": data.allow_full_transcript,
+            "allow_raw_metrics": data.allow_raw_metrics,
+            "expires_at": expires_at.isoformat(),
+            "revoked": False,
+            "created_at": now.isoformat(),
+            "revoked_at": None,
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"error {e}")
-        raise HTTPException(500, f"error {e}")
+    )
+    if not created:
+        raise HTTPException(status_code=500, detail="failed to create share link")
+
+    public_url = str(request.base_url).rstrip("/") + f"/api/v1/public/dashboard/{raw_token}"
+    return {
+        "share_id": share_id,
+        "public_url": public_url,
+        "expires_at": expires_at.isoformat(),
+        "revoked": False,
+    }
+
+
+@router.get("/projects/{project_code}/share-links")
+async def list_share_links(
+    project_code: str,
+    request: Request,
+    response: Response,
+    jwt: str | None = Query(default=None),
+):
+    payload = _resolve_auth_payload(request, response, jwt)
+    _resolve_project_ownership_or_fail(payload["user_code"], project_code)
+
+    links = list_project_share_links(project_code, payload["user_code"])
+    public_links = []
+    for link in links:
+        public_links.append(
+            {
+                "share_id": link.get("share_id"),
+                "project_code": link.get("project_code"),
+                "token_prefix": link.get("token_prefix"),
+                "allow_full_transcript": link.get("allow_full_transcript", False),
+                "allow_raw_metrics": link.get("allow_raw_metrics", False),
+                "expires_at": link.get("expires_at"),
+                "revoked": link.get("revoked", False),
+                "created_at": link.get("created_at"),
+                "revoked_at": link.get("revoked_at"),
+            }
+        )
+    return {"items": public_links, "total": len(public_links)}
+
+
+@router.delete("/projects/{project_code}/share-links/{share_id}")
+async def revoke_share_link(
+    project_code: str,
+    share_id: str,
+    request: Request,
+    response: Response,
+    jwt: str | None = Query(default=None),
+):
+    payload = _resolve_auth_payload(request, response, jwt)
+    _resolve_project_ownership_or_fail(payload["user_code"], project_code)
+
+    revoked = revoke_project_share_link(project_code, payload["user_code"], share_id)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="share link not found")
+
+    return {"message": "share link revoked", "share_id": share_id, "revoked": True}
+
+
+@router.get("/public/dashboard/{token}")
+async def public_dashboard(
+    token: str,
+    request: Request,
+    fase: str | None = Query(default=None),
+    postura: str | None = Query(default=None),
+    orador: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    _enforce_public_rate_limit(request)
+
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    share_link = get_project_share_link_by_token_hash(token_hash)
+    if not share_link:
+        raise HTTPException(status_code=404, detail="share link not found")
+
+    if share_link.get("revoked", False):
+        raise HTTPException(status_code=410, detail="share link revoked")
+
+    expires_at_raw = share_link.get("expires_at")
+    expires_at = datetime.fromisoformat(expires_at_raw)
+    if expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="share link expired")
+
+    project = get_project_by_code(share_link["project_code"])
+    if not project:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    print(
+        "public-dashboard-access",
+        {
+            "share_id": share_link.get("share_id"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ip_hash": hashlib.sha256((request.client.host if request.client else "").encode("utf-8")).hexdigest()[:16],
+        },
+    )
+
+    dashboard = _build_dashboard_payload(
+        project=project,
+        fase=fase,
+        postura=postura,
+        orador=orador,
+        limit=limit,
+        offset=offset,
+        include_transcript=share_link.get("allow_full_transcript", False),
+        include_metrics=share_link.get("allow_raw_metrics", False),
+    )
+
+    return {
+        "project": dashboard["project"],
+        "summary": dashboard["summary"],
+        "segments": dashboard["segments"],
+    }

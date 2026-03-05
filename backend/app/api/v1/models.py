@@ -1,8 +1,8 @@
+from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from fastapi import UploadFile, File, Form, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from fastapi import UploadFile, File, Form, Depends
+
+from fastapi import File, Form, UploadFile
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import re
 
 
@@ -37,7 +37,7 @@ class CredsInput(BaseModel):
 class NewProjectInfo(BaseModel):
     name: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=0, max_length=128)
-    jwt: str = Field(...)
+    jwt: Optional[str] = Field(default=None)
     debate_type: str = Field(default="upct", min_length=1, max_length=32)
     team_a_name: str = Field(default="Equipo A", min_length=1, max_length=64)
     team_b_name: str = Field(default="Equipo B", min_length=1, max_length=64)
@@ -51,7 +51,7 @@ class AnalyseData(BaseModel):
     postura: str = Field(..., min_length=1, max_length=16)
     orador: str = Field(...)
     num_speakers: int = Field(...)
-    jwt: str = Field(...)
+    jwt: Optional[str] = Field(default=None)
     project_code: str = Field(...)
     file: UploadFile
 
@@ -75,7 +75,7 @@ class AnalyseData(BaseModel):
         postura: str = Form(...),
         orador: str = Form(...),
         num_speakers: int = Form(...),
-        jwt: str = Form(...),
+        jwt: Optional[str] = Form(default=None),
         project_code: str = Form(...),
         file: UploadFile = File(...)
     ) -> "AnalyseData":
@@ -91,12 +91,28 @@ class AnalyseData(BaseModel):
 
 
 class AuthData(BaseModel):
-    jwt: str = Field(...)
+    jwt: Optional[str] = Field(default=None)
 
 
 class AuthDataProject(BaseModel):
-    jwt: str = Field(...)
+    jwt: Optional[str] = Field(default=None)
     project_code: str = Field(...)
+    include_segments: bool = Field(default=False)
+    include_transcript: bool = Field(default=False)
+    include_metrics: bool = Field(default=False)
+    fase: Optional[str] = Field(default=None, max_length=64)
+    postura: Optional[str] = Field(default=None, max_length=32)
+    orador: Optional[str] = Field(default=None, max_length=128)
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+class AuthDataProjects(BaseModel):
+    jwt: Optional[str] = Field(default=None)
+    q: Optional[str] = Field(default=None, max_length=128)
+    debate_type: Optional[str] = Field(default=None, max_length=32)
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
 
 
 class QuickAnalyseData(BaseModel):
@@ -141,3 +157,10 @@ class QuickAnalyseData(BaseModel):
             debate_type=debate_type,
             file=file
         )
+
+
+class ShareLinkCreateData(BaseModel):
+    jwt: Optional[str] = Field(default=None)
+    expires_at: Optional[datetime] = Field(default=None)
+    allow_full_transcript: bool = Field(default=False)
+    allow_raw_metrics: bool = Field(default=False)

@@ -1,6 +1,7 @@
 from tinydb import TinyDB, Query
 from app.core.security import get_password_hash, verify_password
 from uuid import uuid4
+from datetime import datetime, timezone
 
 db = TinyDB('db.json')
 users_table = db.table('users')
@@ -10,6 +11,8 @@ teams_table = db.table('teams')
 audios_path_table = db.table('audios_path')
 audios_transcription_table = db.table('audios_transcription')
 audios_metrics_table = db.table('audios_metrics')
+project_segments_table = db.table('project_segments')
+project_share_links_table = db.table('project_share_links')
 User = Query()
 
 
@@ -139,6 +142,51 @@ def get_project(data: dict):
         return None
 
 
+def get_project_by_code(project_code: str):
+    try:
+        return projects_table.get(User.code == project_code)
+    except Exception as e:
+        print(f"error {e}")
+        return None
+
+
+def get_project_for_user(user_code: str, project_code: str):
+    try:
+        return projects_table.get(
+            (User.code == project_code) & (User.user_code == user_code)
+        )
+    except Exception as e:
+        print(f"error {e}")
+        return None
+
+
+def get_projects_paginated(
+    user_code: str,
+    q: str | None = None,
+    debate_type: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+):
+    try:
+        projects = projects_table.search(User.user_code == user_code)
+        if q:
+            q_low = q.lower()
+            projects = [
+                p for p in projects
+                if q_low in p.get("name", "").lower()
+                or q_low in p.get("desc", "").lower()
+                or q_low in p.get("debate_topic", "").lower()
+            ]
+        if debate_type:
+            projects = [p for p in projects if p.get("debate_type") == debate_type]
+        total = len(projects)
+        items = projects[offset: offset + limit]
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+    except Exception as e:
+        print(f"error {e}")
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+
 def get_project_debate_type(project_code: str) -> str:
     """
     Obtiene el tipo de debate de un proyecto.
@@ -157,6 +205,139 @@ def get_project_debate_type(project_code: str) -> str:
     except Exception as e:
         print(f"error getting debate type: {e}")
         return "upct"
+
+
+def create_project_segment(data: dict) -> bool:
+    try:
+        project_segments_table.insert(data)
+        return True
+    except Exception as e:
+        print(f"unexpected error: {e}")
+        return False
+
+
+def get_project_segments(
+    project_code: str,
+    fase: str | None = None,
+    postura: str | None = None,
+    orador: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+):
+    try:
+        segments = project_segments_table.search(User.project_code == project_code)
+
+        if fase:
+            segments = [
+                s for s in segments
+                if s.get("fase_id") == fase or s.get("fase_nombre") == fase
+            ]
+        if postura:
+            segments = [s for s in segments if s.get("postura") == postura]
+        if orador:
+            segments = [s for s in segments if s.get("orador") == orador]
+
+        segments.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        total = len(segments)
+        items = segments[offset: offset + limit]
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+    except Exception as e:
+        print(f"error {e}")
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+
+def build_project_dashboard_summary(segments: list[dict]) -> dict:
+    total_segments = len(segments)
+    if total_segments == 0:
+        return {
+            "total_segments": 0,
+            "average_score_percent": 0.0,
+            "score_by_fase": {},
+            "score_by_postura": {},
+            "score_by_orador": {},
+        }
+
+    score_sum = 0.0
+    by_fase = {}
+    by_postura = {}
+    by_orador = {}
+
+    def _accumulate(bucket: dict, key: str, score_percent: float):
+        if key not in bucket:
+            bucket[key] = {"avg_score_percent": 0.0, "count": 0}
+        bucket[key]["avg_score_percent"] += score_percent
+        bucket[key]["count"] += 1
+
+    for segment in segments:
+        analysis = segment.get("analysis", {})
+        score_percent = float(analysis.get("score_percent", 0.0))
+        score_sum += score_percent
+
+        fase_key = segment.get("fase_nombre") or segment.get("fase_id") or "unknown"
+        postura_key = segment.get("postura", "unknown")
+        orador_key = segment.get("orador", "unknown")
+
+        _accumulate(by_fase, fase_key, score_percent)
+        _accumulate(by_postura, postura_key, score_percent)
+        _accumulate(by_orador, orador_key, score_percent)
+
+    for bucket in (by_fase, by_postura, by_orador):
+        for key, value in bucket.items():
+            value["avg_score_percent"] = round(
+                value["avg_score_percent"] / value["count"], 2
+            )
+
+    return {
+        "total_segments": total_segments,
+        "average_score_percent": round(score_sum / total_segments, 2),
+        "score_by_fase": by_fase,
+        "score_by_postura": by_postura,
+        "score_by_orador": by_orador,
+    }
+
+
+def create_project_share_link(data: dict) -> bool:
+    try:
+        project_share_links_table.insert(data)
+        return True
+    except Exception as e:
+        print(f"unexpected error: {e}")
+        return False
+
+
+def list_project_share_links(project_code: str, owner_user_code: str) -> list[dict]:
+    try:
+        links = project_share_links_table.search(
+            (User.project_code == project_code) & (User.owner_user_code == owner_user_code)
+        )
+        links.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return links
+    except Exception as e:
+        print(f"error {e}")
+        return []
+
+
+def revoke_project_share_link(project_code: str, owner_user_code: str, share_id: str) -> bool:
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        updated = project_share_links_table.update(
+            {"revoked": True, "revoked_at": now},
+            (User.project_code == project_code)
+            & (User.owner_user_code == owner_user_code)
+            & (User.share_id == share_id),
+        )
+        return bool(updated)
+    except Exception as e:
+        print(f"error {e}")
+        return False
+
+
+def get_project_share_link_by_token_hash(token_hash: str):
+    try:
+        return project_share_links_table.get(User.token_hash == token_hash)
+    except Exception as e:
+        print(f"error {e}")
+        return None
 
 
 def check_team(project_code, team) -> bool:
