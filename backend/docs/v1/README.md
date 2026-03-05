@@ -2,96 +2,170 @@
 
 ## Base URL
 
-All routes are mounted under `/api/v1` (e.g., `https://<host>/api/v1/login`).
+All routes are mounted under `/api/v1` (example: `https://<host>/api/v1/login`).
 
-## Authentication
+## Authentication (gradual compatibility)
 
-- **Login (`POST /login`)** and **register (`POST /register`)** both return a JWT in the `access_token` field.
-- The token is signed with HS256 and the `SECRET_KEY` loaded from the environment.
-- All subsequent endpoints expect the token to be provided inside the request body (`jwt` field) and do not read it from headers.
+Protected endpoints now support **both** methods:
 
-## Data models used by the client
+1. Recommended: `Authorization: Bearer <access_token>`
+2. Legacy (deprecated): `jwt` field in the request body/query
 
-| Model | Fields | Notes |
-| --- | --- | --- |
-| `CredsInput` | `user` (alphanumeric/underscore, 3‑20 chars)<br>`pswd` (alphanumeric/underscore, 8‑32 chars, must include letters and digits) | Used for login/register requests. |
-| `NewProjectInfo` | `name` (1‑32 chars)<br>`description` (0‑128 chars)<br>`jwt` | Create project payload. |
-| `AnalyseData` | `fase`, `postura`, `orador`, `num_speakers`, `jwt`, `project_code`, `file` (.wav via multipart) | Phase must be one of Introducción, Refutación 1/2, Conclusión, Final; posture must be A Favor/En Contra. |
-| `AuthData` | `jwt` | Used to fetch projects. |
-| `AuthDataProject` | `jwt`, `project_code` | Used to fetch a single project. |
+Behavior rules:
 
-## Endpoints
+- If both are present, **Authorization header wins**.
+- If legacy `jwt` is used, response includes deprecation headers:
+  - `Deprecation: true`
+  - `Sunset: Wed, 30 Sep 2026 23:59:59 GMT`
 
-### `GET /status`
-- **Purpose:** health check for the API.
-- **Response:** `200` with `{"message": "ciceron is running"}`.
+Standard auth errors:
+
+- `401` invalid/expired/missing token
+- `403` authenticated but no access to resource
+- `404` resource not found
+- `422` validation error
+
+## Core endpoints
+
+### `POST /status`
+Health check.
+
+### `GET /debate-types`
+List available debate types and summarized configs.
 
 ### `POST /login`
-- **Request body:** `CredsInput`.
-- **Success response (`200`):**
-  ```json
-  {
-    "message": "login done!",
-    "access_token": "<jwt>",
-    "token_type": "bearer",
-    "user": "<username>"
-  }
-  ```
-- **Errors:** `401` when credentials are incorrect.
+Request body: `CredsInput`.
+Returns JWT in `access_token`.
 
 ### `POST /register`
-- **Request body:** `CredsInput`.
-- **Success response (`200`):** same payload as login (new user, JWT returned).
-- **Errors:** `400` when the user already exists or input fails validation.
+Request body: `CredsInput`.
+Creates user and returns JWT.
 
 ### `POST /new-project`
-- **Request body:** `NewProjectInfo`.
-- **Behavior:** the JWT is decoded to recover `user_code`; a project code is generated via UUID and stored.
-- **Success response (`200`):** `{"message": "project created", "project_code": "<uuid>"}`.
-- **Errors:** `400` when JWT decoding fails or payload invalid.
+Request body: `NewProjectInfo`.
+Auth via header or `jwt` body.
+Creates project with debate metadata (`debate_type`, teams, topic).
 
 ### `POST /analyse`
-- **Request:** `multipart/form-data` created via `AnalyseData.as_form()`. Fields:
-  - `fase`: must be `Introducción`, `Refutación 1`, `Refutación 2`, `Conclusión`, or `Final`.
-  - `postura`: `A Favor` or `En Contra`.
-  - `orador`: string.
-  - `num_speakers`: number of speakers expected.
-  - `jwt`: valid token for the project owner.
-  - `project_code`: UUID created in `/new-project`.
-  - `file`: `.wav` file (mime `audio/wav`, `audio/x-wav`, or `audio/wave`).
-- **Processing:** saves upload, runs `process_complete_analysis`, extracts transcript and metrics, evaluates via the debate pipeline, stores analysis.
-- **Success response (`200`):**
-  ```json
-  {
-    "message": "analysis succeeded!",
-    "fase": "Introducción",
-    "postura": "A Favor",
-    "orador": "",
-    "criterios": [
-      {"criterio": "<name>", "nota": <score>, "anotacion": ""}
-    ],
-    "total": <sum of notes>,
-    "max_total": <max possible>
-  }
-  ```
-- **Errors:**
-  - `500` if any step fails (file validation, analysis pipeline, DB insert).
-  - Input validation errors for invalid phases/postures or non-wav files raise `HTTPException` with details.
+`multipart/form-data`:
+- `fase` (id or display name)
+- `postura`
+- `orador`
+- `num_speakers`
+- `project_code`
+- `file` (`.wav`)
+- legacy `jwt` optional if no Authorization header
+
+What it does:
+- Validates ownership of `project_code`.
+- Runs full transcription+metrics+evaluation.
+- Persists legacy tables (`analysis`, `audios_transcription`, `audios_metrics`).
+- Persists new unified segment snapshot in `project_segments`.
+
+### `POST /quick-analyse`
+No project persistence and no auth required.
+Accepts `fase` by id or display name.
 
 ### `POST /get-projects`
-- **Request body:** `AuthData`.
-- **Success response (`200`):**
-  `{"message": "here are your projects", "result": [<projects>]}` where each entry contains at least `name`, `desc`, `user_code`, and `code`.
-- **Errors:** `401` if JWT decoded user cannot be located.
+Request body: `AuthDataProjects`
+
+Optional filters:
+- `q`
+- `debate_type`
+- `limit` (default `20`, max `100`)
+- `offset` (default `0`)
+
+Response keeps legacy `result` and adds paginated fields:
+- `items`, `total`, `limit`, `offset`
 
 ### `POST /get-project`
-- **Request body:** `AuthDataProject`.
-- **Success response (`200`):**
-  `{"message": "here is project <project_code>", "content": [<analysis records>]}`.
-- **Errors:** `500` on failure (e.g., invalid token, missing project); the exception is logged and `HTTPException(500)` is raised.
+Request body: `AuthDataProject`
 
-## Notes for clients
+Optional dashboard params:
+- `include_segments` (`false` by default)
+- `include_transcript` (`false` by default)
+- `include_metrics` (`false` by default)
+- `fase`, `postura`, `orador`
+- `limit`, `offset`
 
-1. Tokens live in the `jwt` field, not headers. Keep the same token for all protected routes until expiration (~60 minutes).
-2. Uploaded WAV files are temporary—after processing the file is removed.
-3. The response structure for `/get-project` is whatever is stored in `analysis_table`, so expect each record to mirror the object saved in `create_analysis()` (project_code, fase, postura, orador, criterios, total, max_total).
+Response:
+- Keeps legacy payload (`project`, `content`)
+- Adds `dashboard` when `include_segments=true`
+
+## Shareable dashboard endpoints
+
+### `POST /projects/{project_code}/share-links`
+Create a public read-only link.
+
+Body (`ShareLinkCreateData`):
+- `expires_at` optional (default: now + 30 days)
+- `allow_full_transcript` (default `false`)
+- `allow_raw_metrics` (default `false`)
+- legacy `jwt` optional if no Authorization header
+
+Response:
+- `share_id`
+- `public_url`
+- `expires_at`
+- `revoked`
+
+### `GET /projects/{project_code}/share-links`
+List owner share links for project.
+Auth via Authorization header or query `jwt` (legacy).
+
+### `DELETE /projects/{project_code}/share-links/{share_id}`
+Revoke share link.
+Auth via Authorization header or query `jwt` (legacy).
+
+### `GET /public/dashboard/{token}`
+Public read-only endpoint (no user auth).
+
+Optional query filters:
+- `fase`, `postura`, `orador`
+- `limit`, `offset`
+
+Returns:
+- `project`
+- `summary` (aggregated scores)
+- `segments` (paginated)
+
+Public safeguards:
+- Revoked link => `410 Gone`
+- Expired link => `410 Gone`
+- Missing link => `404`
+- Basic in-memory rate limit
+
+## Unified segment shape (`project_segments`)
+
+Each analysis stores one segment snapshot with:
+
+- `segment_id`
+- `project_code`
+- `user_code`
+- `debate_type`
+- `fase_id`, `fase_nombre`
+- `postura`, `orador`
+- `num_speakers`
+- `duration_seconds`
+- `transcript`, `transcript_preview`
+- `metrics_summary`, `metrics_raw`
+- `analysis`:
+  - `criterios`
+  - `total`
+  - `max_total`
+  - `score_percent`
+- `created_at`
+
+## Share link storage shape (`project_share_links`)
+
+- `share_id`
+- `project_code`
+- `owner_user_code`
+- `token_hash` (token is never stored in plain text)
+- `token_prefix`
+- `allow_full_transcript`
+- `allow_raw_metrics`
+- `expires_at`
+- `revoked`
+- `created_at`
+- `revoked_at`
