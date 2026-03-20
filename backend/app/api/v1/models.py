@@ -123,6 +123,7 @@ class QuickAnalyseData(BaseModel):
     postura: str = Field(..., min_length=1, max_length=16)
     orador: str = Field(...)
     num_speakers: int = Field(...)
+    jwt: Optional[str] = Field(default=None)
     debate_type: str = Field(default="upct", min_length=1, max_length=32)
     file: UploadFile
 
@@ -146,6 +147,7 @@ class QuickAnalyseData(BaseModel):
         postura: str = Form(...),
         orador: str = Form(...),
         num_speakers: int = Form(...),
+        jwt: Optional[str] = Form(default=None),
         debate_type: str = Form(default="upct"),
         file: UploadFile = File(...)
     ) -> "QuickAnalyseData":
@@ -154,6 +156,7 @@ class QuickAnalyseData(BaseModel):
             postura=postura,
             orador=orador,
             num_speakers=num_speakers,
+            jwt=jwt,
             debate_type=debate_type,
             file=file
         )

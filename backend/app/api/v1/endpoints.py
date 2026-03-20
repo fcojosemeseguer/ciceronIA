@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, status
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 from app.api.v1.models import (
@@ -62,6 +62,12 @@ DEFAULT_SHARE_LINK_DAYS = 30
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_REQUESTS = 60
 _public_dashboard_rate_limit: dict[str, list[float]] = {}
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+AUTH_RATE_LIMIT_MAX_REQUESTS = 10
+_auth_rate_limit: dict[str, list[float]] = {}
+
+MAX_AUDIO_FILE_SIZE_MB = 25
+MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024
 
 UPLOAD_DIR = Path("uploads/audios")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -463,6 +469,38 @@ def _enforce_public_rate_limit(request: Request) -> None:
     _public_dashboard_rate_limit[source] = alive
 
 
+def _enforce_auth_rate_limit(request: Request, scope: str) -> None:
+    source = request.client.host if request.client else "unknown"
+    key = f"{scope}:{source}"
+    now = time.time()
+    previous = _auth_rate_limit.get(key, [])
+    alive = [ts for ts in previous if now - ts <= AUTH_RATE_LIMIT_WINDOW_SECONDS]
+
+    if len(alive) >= AUTH_RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail="too many authentication attempts, retry later",
+        )
+
+    alive.append(now)
+    _auth_rate_limit[key] = alive
+
+
+def _enforce_upload_size_or_413(upload: UploadFile) -> None:
+    try:
+        upload.file.seek(0, os.SEEK_END)
+        size_bytes = upload.file.tell()
+        upload.file.seek(0)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid upload stream") from exc
+
+    if size_bytes > MAX_AUDIO_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file too large, max size is {MAX_AUDIO_FILE_SIZE_MB}MB",
+        )
+
+
 @router.post("/status")
 async def status_check():
     return {"message": "ciceron is running"}
@@ -474,7 +512,9 @@ async def get_debate_types():
 
 
 @router.post("/login")
-async def login(data: CredsInput):
+async def login(data: CredsInput, request: Request):
+    _enforce_auth_rate_limit(request, scope="login")
+
     creds = {"user": data.user, "pswd": data.pswd}
     if not check_user(creds):
         raise HTTPException(status_code=401, detail="incorrect login")
@@ -496,7 +536,9 @@ async def login(data: CredsInput):
 
 
 @router.post("/register")
-async def register(data: CredsInput):
+async def register(data: CredsInput, request: Request):
+    _enforce_auth_rate_limit(request, scope="register")
+
     creds = {"user": data.user, "pswd": data.pswd}
     if not create_user(creds):
         raise HTTPException(status_code=400, detail="incorrect register")
@@ -571,6 +613,7 @@ async def analyse(
 
     fase_cfg = _resolve_phase_config_or_422(debate_config, data.fase)
     postura_str = _resolve_postura_or_422(debate_config, data.postura)
+    _enforce_upload_size_or_413(data.file)
 
     try:
         file_name = f"{uuid4()}.wav"
@@ -680,15 +723,20 @@ async def analyse(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"error while analysing {exc}") from exc
+        raise HTTPException(status_code=500, detail="error while analysing") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
 
 
 @router.post("/quick-analyse")
-async def quick_analyse(data: QuickAnalyseData = Depends(QuickAnalyseData.as_form)):
+async def quick_analyse(
+    request: Request,
+    response: Response,
+    data: QuickAnalyseData = Depends(QuickAnalyseData.as_form),
+):
     file_path = None
+    _resolve_auth_payload(request, response, data.jwt)
 
     try:
         try:
@@ -698,6 +746,7 @@ async def quick_analyse(data: QuickAnalyseData = Depends(QuickAnalyseData.as_for
 
         fase_cfg = _resolve_phase_config_or_422(debate_config, data.fase)
         postura_str = _resolve_postura_or_422(debate_config, data.postura)
+        _enforce_upload_size_or_413(data.file)
 
         file_name = f"quick_{uuid4()}.wav"
         file_path = UPLOAD_DIR / file_name
@@ -756,7 +805,7 @@ async def quick_analyse(data: QuickAnalyseData = Depends(QuickAnalyseData.as_for
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"error while analysing {exc}") from exc
+        raise HTTPException(status_code=500, detail="error while analysing") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
