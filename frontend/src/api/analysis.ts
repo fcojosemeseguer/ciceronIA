@@ -11,7 +11,6 @@ interface AnalyseRequest {
   orador: string;
   num_speakers: number;
   project_code: string;
-  jwt: string;
   file: File;
   // Campos opcionales de configuración
   minuto_oro_utilizado?: boolean;
@@ -42,7 +41,6 @@ export const analysisService = {
     formData.append('postura', data.postura);
     formData.append('orador', data.orador);
     formData.append('num_speakers', data.num_speakers.toString());
-    formData.append('jwt', data.jwt);
     formData.append('project_code', data.project_code);
     formData.append('file', data.file);
 

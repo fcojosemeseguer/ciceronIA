@@ -20,6 +20,7 @@ import {
   AnalysisSetupScreen,
   ProjectsScreen,
   ProjectDetailsScreen,
+  PublicDashboardScreen,
 } from './components/screens';
 import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
@@ -44,7 +45,8 @@ type AppScreen =
   | 'analysis-results'
   | 'home' 
   | 'debate-details'
-  | 'settings';
+  | 'settings'
+  | 'public-dashboard';
 
 function App() {
   const { checkAuth, isAuthenticated, logout } = useAuthStore();
@@ -54,6 +56,7 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
+  const [publicDashboardToken, setPublicDashboardToken] = useState<string | null>(null);
   
   // Proyecto seleccionado para análisis
   const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
@@ -82,6 +85,18 @@ function App() {
 
   useEffect(() => {
     checkAuth();
+    const path = window.location.pathname;
+    const publicDashboardMatch = path.match(/^\/public\/dashboard\/([^/]+)$/);
+
+    if (publicDashboardMatch?.[1]) {
+      setPublicDashboardToken(decodeURIComponent(publicDashboardMatch[1]));
+      setCurrentScreen('public-dashboard');
+      setScreenHistory(['public-dashboard']);
+    } else if (path === '/auth') {
+      setCurrentScreen('auth');
+      setScreenHistory(['auth']);
+    }
+
     setIsAuthChecked(true);
   }, [checkAuth]);
 
@@ -433,6 +448,19 @@ function App() {
 
       case 'settings':
         return <SettingsScreen onBack={handleGoToDashboard} />;
+
+      case 'public-dashboard':
+        return publicDashboardToken ? (
+          <PublicDashboardScreen
+            token={publicDashboardToken}
+            onBack={() => {
+              setPublicDashboardToken(null);
+              navigateTo('landing');
+            }}
+          />
+        ) : (
+          <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />
+        );
 
       default:
         return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />;
