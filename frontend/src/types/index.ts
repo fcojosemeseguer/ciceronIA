@@ -275,11 +275,13 @@ export interface Project {
 export interface AnalysisResult {
   message: string;
   fase: string;
+  fase_id?: string;
   postura: string;
   orador: string;
   criterios: CriterioResult[];
   total: number;
   max_total: number;
+  score_percent?: number;
   debate_type: string;
 }
 
@@ -291,6 +293,90 @@ export interface CriterioResult {
   nota: number;
   anotacion: string;
 }
+
+export interface ScoreBucket {
+  avg_score_percent: number;
+  count: number;
+}
+
+export interface ProjectDashboardSummary {
+  total_segments: number;
+  average_score_percent: number;
+  score_by_fase: Record<string, ScoreBucket>;
+  score_by_postura: Record<string, ScoreBucket>;
+  score_by_orador: Record<string, ScoreBucket>;
+}
+
+export interface SegmentAnalysis {
+  criterios: CriterioResult[];
+  total: number;
+  max_total: number;
+  score_percent: number;
+  recommendation?: string | null;
+}
+
+export interface ProjectSegment {
+  segment_id: string;
+  project_code: string;
+  debate_type: string;
+  fase_id: string;
+  fase_nombre: string;
+  postura: string;
+  orador: string;
+  num_speakers: number;
+  duration_seconds: number | null;
+  analysis: SegmentAnalysis;
+  metrics_summary: Record<string, Record<string, number | null>>;
+  metrics_raw?: Record<string, Record<string, number | null>>;
+  transcript?: Array<Record<string, any>>;
+  transcript_preview?: string;
+  created_at: string;
+}
+
+export interface PaginatedSegments {
+  items: ProjectSegment[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ProjectDashboardResponse {
+  project: Project;
+  summary: ProjectDashboardSummary;
+  segments: PaginatedSegments;
+}
+
+export interface GetProjectRequestOptions {
+  include_segments?: boolean;
+  include_transcript?: boolean;
+  include_metrics?: boolean;
+  fase?: string | null;
+  postura?: string | null;
+  orador?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ShareLink {
+  share_id: string;
+  project_code: string;
+  token_prefix: string;
+  allow_full_transcript: boolean;
+  allow_raw_metrics: boolean;
+  expires_at: string;
+  revoked: boolean;
+  created_at: string;
+  revoked_at?: string | null;
+  public_url?: string;
+}
+
+export interface CreateShareLinkRequest {
+  expires_at?: string;
+  allow_full_transcript?: boolean;
+  allow_raw_metrics?: boolean;
+}
+
+export interface PublicDashboardResponse extends ProjectDashboardResponse {}
 
 /**
  * Upload de audio para análisis

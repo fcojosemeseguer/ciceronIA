@@ -72,12 +72,6 @@ export const useAnalysisStore = create<AnalysisStore>()(
       const upload = get().uploads.find(u => u.id === uploadId);
       if (!upload || !upload.file || !upload.wavBlob) return;
 
-      const token = localStorage.getItem('ciceron_token');
-      if (!token) {
-        set({ error: 'No hay sesión activa' });
-        return;
-      }
-
       if (!project) {
         set({ error: 'Se requiere un proyecto para el análisis' });
         return;
@@ -95,7 +89,6 @@ export const useAnalysisStore = create<AnalysisStore>()(
           orador: `${upload.numOradores} oradores`,
           num_speakers: upload.numOradores,
           project_code: project.code,
-          jwt: token,
           file: new File([upload.wavBlob], 'audio.wav', { type: 'audio/wav' }),
           // Campos opcionales de configuración
           minuto_oro_utilizado: upload.minutoOroUtilizado,

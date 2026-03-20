@@ -83,18 +83,12 @@ export const useRealtimeAnalysis = (
 
       if (project) {
         // Análisis con proyecto
-        const token = localStorage.getItem('ciceron_token');
-        if (!token) {
-          throw new Error('No hay sesión activa');
-        }
-
         result = await analysisService.analyse({
           fase: mapRoundTypeToFase(pending.recording.roundType),
           postura: mapTeamToPostura(pending.recording.team),
           orador: `Orador ${pending.recording.order}`,
           num_speakers: 1,
           project_code: project.code,
-          jwt: token,
           file: file,
         });
       } else {

@@ -19,3 +19,4 @@ export { SettingsScreen } from './SettingsScreen';
 export { AnalysisSetupScreen } from './AnalysisSetupScreen';
 export { ProjectsScreen } from './ProjectsScreen';
 export { ProjectDetailsScreen } from './ProjectDetailsScreen';
+export { PublicDashboardScreen } from './PublicDashboardScreen';
