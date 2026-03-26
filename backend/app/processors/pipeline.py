@@ -440,6 +440,19 @@ class ChatSession:
         )
         return response.content
 
+    def ask_once(self, message: str) -> str:
+        """
+        Envía un mensaje aislado al LLM sin usar ni persistir historial.
+
+        Args:
+            message: Mensaje a enviar
+
+        Returns:
+            Respuesta del LLM como string
+        """
+        response = self._chain.invoke({"input": message})
+        return response.content
+
     def get_history(self) -> list[dict]:
         """
         Obtiene el historial completo de mensajes de la sesión.
