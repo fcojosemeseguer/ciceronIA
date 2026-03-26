@@ -101,9 +101,14 @@ KEY_METRICS_NAMES = [
 ]
 
 
+def get_chat(project_code):
+    return chats.get(project_code)
+
+
 def _normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
-    ascii_value = "".join(c for c in normalized if not unicodedata.combining(c))
+    ascii_value = "".join(
+        c for c in normalized if not unicodedata.combining(c))
     return " ".join(ascii_value.lower().strip().split())
 
 
@@ -112,7 +117,8 @@ def _extract_bearer_token(request: Request) -> str | None:
     if not auth_header:
         return None
     if not auth_header.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="invalid authorization header")
+        raise HTTPException(
+            status_code=401, detail="invalid authorization header")
     token = auth_header.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="missing bearer token")
@@ -166,7 +172,8 @@ def _resolve_phase_config_or_422(debate_config, fase_input: str):
         if normalized_input in {_normalize_text(candidate.id), _normalize_text(candidate.nombre)}:
             return candidate
 
-    valid_options = [f.id for f in debate_config.fases] + [f.nombre for f in debate_config.fases]
+    valid_options = [f.id for f in debate_config.fases] + \
+        [f.nombre for f in debate_config.fases]
     raise HTTPException(
         status_code=422,
         detail=f"invalid fase '{fase_input}'. valid values: {valid_options}",
@@ -260,7 +267,8 @@ def _build_legacy_segments(
     orador: str | None,
 ) -> list[dict]:
     legacy_items = get_project(
-        {"user_code": project.get("user_code"), "project_code": project["code"]}
+        {"user_code": project.get("user_code"),
+         "project_code": project["code"]}
     ) or []
     legacy_prompts = get_project_chat_human_messages(project["code"])
     legacy_ai_messages = get_project_chat_ai_messages(project["code"])
@@ -321,9 +329,11 @@ def _build_legacy_segments(
             if line.startswith("- ") and ": " in line:
                 metric_name, metric_value = line[2:].split(": ", 1)
                 try:
-                    parsed_metrics[current_speaker][metric_name.strip()] = float(metric_value)
+                    parsed_metrics[current_speaker][metric_name.strip()] = float(
+                        metric_value)
                 except ValueError:
-                    parsed_metrics[current_speaker][metric_name.strip()] = metric_value.strip()
+                    parsed_metrics[current_speaker][metric_name.strip(
+                    )] = metric_value.strip()
 
         return transcript_items, parsed_metrics
 
@@ -342,19 +352,23 @@ def _build_legacy_segments(
                 return False
         return True
 
-    filtered = [(idx, item) for idx, item in enumerate(legacy_items) if _matches_filter(item)]
+    filtered = [(idx, item) for idx, item in enumerate(
+        legacy_items) if _matches_filter(item)]
     built = []
     for idx, item in filtered:
         total = item.get("total", 0)
         max_total = item.get("max_total", 0)
-        score_percent = round((total / max_total) * 100, 2) if max_total else 0.0
+        score_percent = round((total / max_total) * 100,
+                              2) if max_total else 0.0
         fase_nombre = item.get("fase", "Unknown")
         transcript_items: list[dict] = []
         metrics_items: dict = {}
         if idx < len(legacy_prompts):
-            transcript_items, metrics_items = _parse_legacy_prompt(legacy_prompts[idx])
+            transcript_items, metrics_items = _parse_legacy_prompt(
+                legacy_prompts[idx])
 
-        transcript_preview = _build_transcript_preview(transcript_items) if transcript_items else ""
+        transcript_preview = _build_transcript_preview(
+            transcript_items) if transcript_items else ""
         recommendation = None
         if idx < len(legacy_ai_messages):
             try:
@@ -430,7 +444,8 @@ def _build_dashboard_payload(
 
     # Backward compatibility for projects analyzed before project_segments existed.
     if not all_items:
-        legacy_segments = _build_legacy_segments(project, fase, postura, orador)
+        legacy_segments = _build_legacy_segments(
+            project, fase, postura, orador)
         total_items = len(legacy_segments)
         all_items = legacy_segments
         paged_items = legacy_segments[offset: offset + limit]
@@ -474,7 +489,8 @@ def _enforce_auth_rate_limit(request: Request, scope: str) -> None:
     key = f"{scope}:{source}"
     now = time.time()
     previous = _auth_rate_limit.get(key, [])
-    alive = [ts for ts in previous if now - ts <= AUTH_RATE_LIMIT_WINDOW_SECONDS]
+    alive = [ts for ts in previous if now -
+             ts <= AUTH_RATE_LIMIT_WINDOW_SECONDS]
 
     if len(alive) >= AUTH_RATE_LIMIT_MAX_REQUESTS:
         raise HTTPException(
@@ -492,7 +508,8 @@ def _enforce_upload_size_or_413(upload: UploadFile) -> None:
         size_bytes = upload.file.tell()
         upload.file.seek(0)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="invalid upload stream") from exc
+        raise HTTPException(
+            status_code=400, detail="invalid upload stream") from exc
 
     if size_bytes > MAX_AUDIO_FILE_SIZE_BYTES:
         raise HTTPException(
@@ -520,7 +537,8 @@ async def login(data: CredsInput, request: Request):
         raise HTTPException(status_code=401, detail="incorrect login")
 
     user_code = get_user_code(creds)
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + \
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": data.user,
         "exp": expire,
@@ -544,7 +562,8 @@ async def register(data: CredsInput, request: Request):
         raise HTTPException(status_code=400, detail="incorrect register")
 
     user_code = get_user_code(creds)
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + \
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": data.user,
         "exp": expire,
@@ -630,7 +649,8 @@ async def analyse(
             )
         chat = chats[project["code"]]
 
-        analysis_data = process_complete_analysis(str(file_path), num_speakers=data.num_speakers)
+        analysis_data = process_complete_analysis(
+            str(file_path), num_speakers=data.num_speakers)
         transcription = analysis_data["transcript"]
         metrics = analysis_data["metrics"]
 
@@ -661,11 +681,13 @@ async def analyse(
         total = 0
         for criterio, nota in resultado.puntuaciones.items():
             anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append({"criterio": criterio, "nota": nota, "anotacion": anotacion})
+            criterios.append(
+                {"criterio": criterio, "nota": nota, "anotacion": anotacion})
             total += nota
 
         max_total = len(resultado.puntuaciones) * debate_config.escala_max
-        score_percent = round((total / max_total) * 100, 2) if max_total > 0 else 0.0
+        score_percent = round((total / max_total) * 100,
+                              2) if max_total > 0 else 0.0
 
         if not create_analysis(
             {
@@ -679,7 +701,8 @@ async def analyse(
                 "debate_type": debate_type_id,
             }
         ):
-            raise HTTPException(status_code=500, detail="error while saving legacy analysis")
+            raise HTTPException(
+                status_code=500, detail="error while saving legacy analysis")
 
         segment_payload = {
             "segment_id": str(uuid4()),
@@ -706,7 +729,8 @@ async def analyse(
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         if not create_project_segment(segment_payload):
-            raise HTTPException(status_code=500, detail="error while saving project segment")
+            raise HTTPException(
+                status_code=500, detail="error while saving project segment")
 
         return {
             "message": "analysis succeeded!",
@@ -724,7 +748,8 @@ async def analyse(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="error while analysing") from exc
+        raise HTTPException(
+            status_code=500, detail="error while analysing") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
@@ -756,9 +781,11 @@ async def quick_analyse(
         await data.file.close()
 
         temp_session_id = f"quick_{id(data)}"
-        chat = create_chat(temp_session_id, temp_session_id, debate_type_config=debate_config)
+        chat = create_chat(temp_session_id, temp_session_id,
+                           debate_type_config=debate_config)
 
-        analysis_data = process_complete_analysis(str(file_path), num_speakers=data.num_speakers)
+        analysis_data = process_complete_analysis(
+            str(file_path), num_speakers=data.num_speakers)
         transcription = analysis_data["transcript"]
         metrics = analysis_data["metrics"]
 
@@ -786,7 +813,8 @@ async def quick_analyse(
         total = 0
         for criterio, nota in resultado.puntuaciones.items():
             anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append({"criterio": criterio, "nota": nota, "anotacion": anotacion})
+            criterios.append(
+                {"criterio": criterio, "nota": nota, "anotacion": anotacion})
             total += nota
 
         max_total = len(resultado.puntuaciones) * debate_config.escala_max
@@ -806,7 +834,8 @@ async def quick_analyse(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="error while analysing") from exc
+        raise HTTPException(
+            status_code=500, detail="error while analysing") from exc
     finally:
         if file_path is not None and file_path.exists():
             file_path.unlink()
@@ -839,9 +868,11 @@ async def getprojects(data: AuthDataProjects, request: Request, response: Respon
 @router.post("/get-project")
 async def getproject(data: AuthDataProject, request: Request, response: Response):
     payload = _resolve_auth_payload(request, response, data.jwt)
-    project = _resolve_project_ownership_or_fail(payload["user_code"], data.project_code)
+    project = _resolve_project_ownership_or_fail(
+        payload["user_code"], data.project_code)
 
-    result = get_project({"user_code": payload["user_code"], "project_code": data.project_code})
+    result = get_project(
+        {"user_code": payload["user_code"], "project_code": data.project_code})
     response_payload = {
         "message": f"here is project {data.project_code}",
         "project": project,
@@ -872,15 +903,18 @@ async def create_share_link(
     response: Response,
 ):
     payload = _resolve_auth_payload(request, response, data.jwt)
-    project = _resolve_project_ownership_or_fail(payload["user_code"], project_code)
+    project = _resolve_project_ownership_or_fail(
+        payload["user_code"], project_code)
 
     now = datetime.now(timezone.utc)
-    expires_at = data.expires_at or (now + timedelta(days=DEFAULT_SHARE_LINK_DAYS))
+    expires_at = data.expires_at or (
+        now + timedelta(days=DEFAULT_SHARE_LINK_DAYS))
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
     if expires_at <= now:
-        raise HTTPException(status_code=422, detail="expires_at must be in the future")
+        raise HTTPException(
+            status_code=422, detail="expires_at must be in the future")
 
     raw_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
@@ -902,9 +936,11 @@ async def create_share_link(
         }
     )
     if not created:
-        raise HTTPException(status_code=500, detail="failed to create share link")
+        raise HTTPException(
+            status_code=500, detail="failed to create share link")
 
-    public_url = str(request.base_url).rstrip("/") + f"/api/v1/public/dashboard/{raw_token}"
+    public_url = str(request.base_url).rstrip("/") + \
+        f"/api/v1/public/dashboard/{raw_token}"
     return {
         "share_id": share_id,
         "public_url": public_url,
@@ -953,7 +989,8 @@ async def revoke_share_link(
     payload = _resolve_auth_payload(request, response, jwt)
     _resolve_project_ownership_or_fail(payload["user_code"], project_code)
 
-    revoked = revoke_project_share_link(project_code, payload["user_code"], share_id)
+    revoked = revoke_project_share_link(
+        project_code, payload["user_code"], share_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="share link not found")
 
