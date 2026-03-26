@@ -167,3 +167,8 @@ class ShareLinkCreateData(BaseModel):
     expires_at: Optional[datetime] = Field(default=None)
     allow_full_transcript: bool = Field(default=False)
     allow_raw_metrics: bool = Field(default=False)
+
+
+class DashBoardData(BaseModel):
+    jwt: str = Field(default=None)
+    project_code: str = Field(default=None)

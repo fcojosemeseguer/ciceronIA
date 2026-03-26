@@ -685,6 +685,7 @@ async def analyse(
             "segment_id": str(uuid4()),
             "project_code": project["code"],
             "user_code": user_code,
+            "file_path": str(file_path),
             "debate_type": debate_type_id,
             "fase_id": fase_cfg.id,
             "fase_nombre": fase_cfg.nombre,
