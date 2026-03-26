@@ -178,7 +178,8 @@ def get_projects_paginated(
                 or q_low in p.get("debate_topic", "").lower()
             ]
         if debate_type:
-            projects = [p for p in projects if p.get("debate_type") == debate_type]
+            projects = [p for p in projects if p.get(
+                "debate_type") == debate_type]
         total = len(projects)
         items = projects[offset: offset + limit]
         return {"items": items, "total": total, "limit": limit, "offset": offset}
@@ -190,10 +191,10 @@ def get_projects_paginated(
 def get_project_debate_type(project_code: str) -> str:
     """
     Obtiene el tipo de debate de un proyecto.
-    
+
     Args:
         project_code: Código del proyecto
-    
+
     Returns:
         ID del tipo de debate (ej: "upct", "retor"). Default "upct" si no está definido.
     """
@@ -225,7 +226,8 @@ def get_project_segments(
     offset: int = 0,
 ):
     try:
-        segments = project_segments_table.search(User.project_code == project_code)
+        segments = project_segments_table.search(
+            User.project_code == project_code)
 
         if fase:
             segments = [
@@ -244,6 +246,25 @@ def get_project_segments(
     except Exception as e:
         print(f"error {e}")
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+
+def get_project_segment_by_file_path(file_path: str):
+    try:
+        return project_segments_table.get(User.file_path == file_path)
+    except Exception as e:
+        print(f"error {e}")
+        return None
+
+
+def get_segment_analysis_by_file_path(file_path: str) -> dict | None:
+    try:
+        segment = get_project_segment_by_file_path(file_path)
+        if not segment:
+            return None
+        return segment.get("analysis")
+    except Exception as e:
+        print(f"error {e}")
+        return None
 
 
 def build_project_dashboard_summary(segments: list[dict]) -> dict:
@@ -273,7 +294,8 @@ def build_project_dashboard_summary(segments: list[dict]) -> dict:
         score_percent = float(analysis.get("score_percent", 0.0))
         score_sum += score_percent
 
-        fase_key = segment.get("fase_nombre") or segment.get("fase_id") or "unknown"
+        fase_key = segment.get("fase_nombre") or segment.get(
+            "fase_id") or "unknown"
         postura_key = segment.get("postura", "unknown")
         orador_key = segment.get("orador", "unknown")
 
@@ -308,7 +330,8 @@ def create_project_share_link(data: dict) -> bool:
 def list_project_share_links(project_code: str, owner_user_code: str) -> list[dict]:
     try:
         links = project_share_links_table.search(
-            (User.project_code == project_code) & (User.owner_user_code == owner_user_code)
+            (User.project_code == project_code) & (
+                User.owner_user_code == owner_user_code)
         )
         links.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return links
@@ -460,6 +483,14 @@ def save_metrics(file_path, metrics):
         raise Exception(e)
 
 
+def get_metrics(file_path):
+    try:
+        result = audios_metrics_table.search(User.file_path == file_path)
+        return result[0]["metrics"]
+    except Exception as e:
+        raise Exception(e)
+
+
 def get_postura(team):
     try:
         result = teams_table.search(User.team == team)
@@ -472,22 +503,6 @@ def get_orador(file_path):
     try:
         result = audios_path_table.search(User.file_path == file_path)
         return result[0]["speaker"]
-    except Exception as e:
-        raise Exception(e)
-
-
-def get_saved_transcription_diarization(file_path):
-    try:
-        result = audios_transcription_table.search(User.file_path == file_path)
-        return result[0]["transcript"], result[0]["diarization"]
-    except Exception as e:
-        raise Exception(e)
-
-
-def get_saved_metrics(file_path):
-    try:
-        result = audios_metrics_table.search(User.file_path == file_path)
-        return result[0]["metrics"]
     except Exception as e:
         raise Exception(e)
 
