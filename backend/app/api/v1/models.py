@@ -172,3 +172,9 @@ class ShareLinkCreateData(BaseModel):
 class DashBoardData(BaseModel):
     jwt: str = Field(default=None)
     project_code: str = Field(default=None)
+
+
+class InstantChatData(BaseModel):
+    jwt: str = Field(default=None)
+    project_code: str = Field(default=None)
+    message: str = Field(default=None)

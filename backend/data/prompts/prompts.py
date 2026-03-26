@@ -290,3 +290,9 @@ Los valores deben estar entre 1 y 5 (enteros).
 Las claves del diccionario "anotaciones" deben ser las mismas 5 claves.
 NO inventes bloques adicionales ni omitas ninguno.
 """
+
+
+def get_system_prompt_user(message: str):
+    return f"""
+      Con todo el contexto que tienes detrás, resuelve de la manera más detallada que sepas esta duda del usuario sobre tus evaluaciones anteriores, de forma clara y sencilla. No des hueco a un nuevo mensaje, es decir, no le hagas preguntas. Tu mensaje debe ser el último. Input del usario: {message}
+    """

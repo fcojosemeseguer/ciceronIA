@@ -1,5 +1,7 @@
 from itertools import groupby
+from app.api.v1.endpoints import get_chat
 from app.core.database import get_project_segments
+from data.prompts.prompts import get_system_prompt_user
 
 
 def get_transcription_formatted(transcript):
@@ -39,3 +41,13 @@ def get_metrics_transcription_scores_formatted(project_code):
         scores = get_scores_formatted(r.get("analysis"))
         output[file_path]["scores"] = scores
     return output
+
+
+def talk_to_chat_session(project_code: str, message: str):
+    chat = get_chat(project_code)
+    if chat is None:
+        raise ValueError(
+            "There is no chat for this project, try uploading and analysing audio first")
+
+    prompt = get_system_prompt_user(message)
+    return chat.ask_once(prompt)
