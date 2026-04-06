@@ -12,12 +12,19 @@ interface DashboardScreenProps {
   onNewDebate: () => void;
   onAnalyzeRecorded: () => void;
   onViewHistory: () => void;
+  // Nuevos handlers para flujo simplificado
+  onNewLiveDebate?: () => void;
+  onNewAnalysis?: () => void;
+  onViewDebates?: () => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onNewDebate,
   onAnalyzeRecorded,
   onViewHistory,
+  onNewLiveDebate,
+  onNewAnalysis,
+  onViewDebates,
 }) => {
   const { user } = useAuthStore();
 
@@ -25,26 +32,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     {
       id: 'new-debate',
       title: 'Nuevo Debate',
-      description: 'Inicia un debate en vivo o analiza uno grabado',
+      description: 'Inicia un debate en vivo con temporizador y grabación',
       icon: <Plus className="w-8 h-8" />,
       color: 'from-cyan-500 to-blue-600',
-      onClick: onNewDebate,
+      onClick: onNewLiveDebate || onNewDebate,
     },
     {
       id: 'analyze',
-      title: 'Analizar Debate Grabado',
+      title: 'Analizar Grabación',
       description: 'Sube audios y obtén análisis detallado con IA',
       icon: <FileAudio className="w-8 h-8" />,
       color: 'from-orange-500 to-red-600',
-      onClick: onAnalyzeRecorded,
+      onClick: onNewAnalysis || onAnalyzeRecorded,
     },
     {
-      id: 'projects',
-      title: 'Mis Proyectos',
-      description: 'Gestiona tus debates y análisis',
+      id: 'debates',
+      title: 'Debates Anteriores',
+      description: 'Ver historial de debates y análisis',
       icon: <FolderOpen className="w-8 h-8" />,
       color: 'from-purple-500 to-pink-600',
-      onClick: onAnalyzeRecorded,
+      onClick: onViewDebates || onViewHistory,
     },
   ];
 

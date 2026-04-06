@@ -9,3 +9,4 @@ export { default as projectsService } from './projects';
 export { default as analysisService } from './analysis';
 export { default as debateTypesService } from './debateTypes';
 export { default as dashboardService } from './dashboard';
+export { default as debatesService } from './debates';

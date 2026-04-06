@@ -10,15 +10,17 @@ import { useAutoAudioRecording } from '../../hooks/useAutoAudioRecording';
 import { useRealtimeAnalysis } from '../../hooks/useRealtimeAnalysis';
 import { TeamCard, CentralPanel } from '../common';
 import { Mic, MicOff, Loader2, CheckCircle, AlertCircle, BarChart3, ArrowLeft, Play, X, FileAudio } from 'lucide-react';
-import { AudioRecording, AnalysisResult, Project } from '../../types';
+import { AudioRecording, AnalysisResult, Project, Debate } from '../../types';
 
 interface CompetitionScreenProps {
-  project: Project;
+  project?: Project;  // LEGACY - mantener durante transición
+  debate?: Debate;    // NUEVO - usar este preferentemente
   onFinish?: () => void;
   onBack?: () => void;
 }
 
-export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, onFinish, onBack }) => {
+export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, debate, onFinish, onBack }) => {
+  // Todos los hooks primero
   const {
     config,
     state,
@@ -41,14 +43,8 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, o
     canNavigateToTeamBTurn,
     addAnalysisResult,
     initializeDebateFromProject,
+    initializeDebate,
   } = useDebateStore();
-
-  // Inicializar debate desde el proyecto al montar
-  useEffect(() => {
-    if (project) {
-      initializeDebateFromProject(project);
-    }
-  }, [project, initializeDebateFromProject]);
 
   // Estado para el panel de resultados
   const [showResultsPanel, setShowResultsPanel] = useState(false);
@@ -56,6 +52,12 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, o
   const [currentRecording, setCurrentRecording] = useState<AudioRecording | null>(null);
   const [isAnalyzingCurrent, setIsAnalyzingCurrent] = useState(false);
 
+  // Usar debate si está disponible, sino project (legacy)
+  const debateData = debate || project;
+  
+  // Extraer valores del debate/proyecto
+  const debateTypeId = debate?.debate_type || project?.debate_type || 'upct';
+  
   // Hook para análisis en tiempo real
   const handleAnalysisComplete = useCallback((result: AnalysisResult) => {
     addAnalysisResult(result);
@@ -69,22 +71,52 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, o
     isProcessing,
     completedCount,
     errorCount,
-  } = useRealtimeAnalysis(project, project.debate_type || 'upct', handleAnalysisComplete);
+  } = useRealtimeAnalysis(debateData as any, debateTypeId, handleAnalysisComplete);
 
-  // Hook de grabación - solo graba, no analiza automáticamente
-  const handleRecordingComplete = useCallback((recording: AudioRecording) => {
-    setCurrentRecording(recording);
-  }, []);
-
-  const { isRecording, audioError } = useAutoAudioRecording({
-    onRecordingComplete: handleRecordingComplete,
-  });
-  
+  // Timer hook - no necesita parámetros
   useDebateTimer();
+  
+  // Auto recording hook - usa el hook simple sin parámetros
+  const { isRecording } = useAutoAudioRecording();
 
-  const currentRound = getCurrentRound();
-  const teamAName = project.team_a_name || getTeamName('A');
-  const teamBName = project.team_b_name || getTeamName('B');
+  // Inicializar debate desde los datos al montar
+  useEffect(() => {
+    if (debateData) {
+      if (debate) {
+        // Nuevo formato: inicializar desde Debate
+        const isRetor = debate.debate_type === 'retor';
+        const roundDurations = isRetor
+          ? {
+              introduccion: 360,
+              primerRefutador: 120,
+              segundoRefutador: 300,
+              conclusion: 180,
+            }
+          : {
+              introduccion: 180,
+              primerRefutador: 240,
+              segundoRefutador: 240,
+              conclusion: 180,
+            };
+        
+        initializeDebate({
+          teamAName: debate.team_a_name,
+          teamBName: debate.team_b_name,
+          debateTopic: debate.debate_topic,
+          roundDurations,
+        });
+      } else if (project) {
+        // Legacy: inicializar desde Project
+        initializeDebateFromProject(project);
+      }
+    }
+  }, [debateData, debate, project, initializeDebate, initializeDebateFromProject]);
+
+  // Extraer valores del debate/proyecto
+  const teamAName = debate?.team_a_name || project?.team_a_name || getTeamName('A');
+  const teamBName = debate?.team_b_name || project?.team_b_name || getTeamName('B');
+  const debateTopic = debate?.debate_topic || debate?.name || project?.debate_topic || project?.name || 'Tema del Debate';
+  const debateTypeLabel = debateTypeId === 'retor' ? 'RETOR' : 'UPCT';
   const isTeamAActive = currentTeam === 'A';
 
   const totalRounds = 8;
@@ -129,6 +161,17 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, o
     }
   }, [state, onFinish]);
 
+  // Early return después de todos los hooks
+  if (!debateData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white/60">Error: No se proporcionó debate ni proyecto</div>
+      </div>
+    );
+  }
+
+  const currentRound = getCurrentRound();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Header con info del proyecto */}
@@ -144,9 +187,9 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, o
               </button>
             )}
             <div>
-              <h1 className="text-xl font-bold text-white">{project.debate_topic || project.name}</h1>
+              <h1 className="text-xl font-bold text-white">{debateTopic}</h1>
               <p className="text-sm text-white/50">
-                {teamAName} vs {teamBName} · {project.debate_type === 'retor' ? 'RETOR' : 'UPCT'}
+                {teamAName} vs {teamBName} · {debateTypeLabel}
               </p>
             </div>
           </div>

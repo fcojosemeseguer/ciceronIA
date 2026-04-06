@@ -5,21 +5,24 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Play, BarChart3, Loader2, Users } from 'lucide-react';
 import { useProjectStore, useAnalysisStore } from '../../store';
-import { AudioUpload, Project, DebateType } from '../../types';
+import { AudioUpload, Project, DebateType, Debate } from '../../types';
 import { LiquidGlassButton, AudioDropZone } from '../common';
 import { generateId } from '../../utils/audioConverter';
 
 interface AnalysisScreenProps {
-  project: Project;
+  project?: Project;  // LEGACY - mantener durante transición
+  debate?: Debate;    // NUEVO - usar este preferentemente
   onBack: () => void;
   onViewResults: () => void;
 }
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   project,
+  debate,
   onBack,
   onViewResults,
 }) => {
+  // Todos los hooks primero - NO mover
   const { debateTypes, selectedDebateType, selectDebateType, fetchDebateTypes } = useProjectStore();
   const {
     uploads,
@@ -38,6 +41,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const [numOradores, setNumOradores] = useState(1);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const uploadsInitialized = React.useRef(false);
+
+  // Usar debate si está disponible, sino project (legacy)
+  const debateData = debate || project;
+  
+  // Extraer código y tipo del debate/proyecto
+  const debateCode = debate?.code || project?.code || '';
+  const debateType = debate?.debate_type || project?.debate_type || 'upct';
 
   // DEBUG: Ver cuándo se monta el componente
   useEffect(() => {
@@ -67,11 +77,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   // Seleccionar tipo de debate basado en el proyecto
   useEffect(() => {
     if (project?.debate_type) {
-      selectDebateType(project.debate_type);
+      selectDebateType(debateType);
     } else if (debateTypes.length > 0 && !selectedDebateType) {
       selectDebateType(debateTypes[0].id);
     }
-  }, [project, debateTypes, selectedDebateType, selectDebateType]);
+  }, [project, debateTypes, selectedDebateType, selectDebateType, debateType]);
 
   // Generar uploads iniciales basados en el tipo de debate
   useEffect(() => {
@@ -149,13 +159,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
 
   const handleRetryUpload = (uploadId: string) => {
     const upload = uploads.find((u) => u.id === uploadId);
-    if (upload) {
-      analyseAudio(uploadId, project, selectedDebateType);
+    if (upload && debateData) {
+      analyseAudio(uploadId, debateData as Project, selectedDebateType);
     }
   };
 
   const handleAnalyseAll = () => {
-    analyseAll(project, selectedDebateType);
+    if (debateData) {
+      analyseAll(debateData as Project, selectedDebateType);
+    }
   };
 
   const handleChangeDebateType = (typeId: string) => {
@@ -173,6 +185,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const totalCount = getTotalCount();
   const hasPendingUploads = uploads.some((u) => u.file && u.status === 'pending');
   const allCompleted = totalCount > 0 && completedCount === totalCount;
+
+  // Early return después de todos los hooks
+  if (!debateData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white/60">Error: No se proporcionó debate ni proyecto</div>
+      </div>
+    );
+  }
 
   if (!selectedDebateType) {
     return (

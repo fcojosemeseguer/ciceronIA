@@ -1,6 +1,7 @@
 /**
  * App principal - Componente raíz de la aplicación
  * Estructura renovada según especificaciones funcionales
+ * VERSIÓN SIMPLIFICADA: Unificación de proyectos y debates
  */
 
 import React, { useState, useEffect } from 'react';
@@ -9,7 +10,7 @@ import {
   HomeScreen, 
   SetupScreen, 
   CompetitionScreen, 
-  DebateDetailsScreen, 
+  DebateDetailsScreen as LegacyDebateDetailsScreen, 
   ScoringScreen, 
   LandingPage,
   AnalysisScreen,
@@ -21,13 +22,18 @@ import {
   ProjectsScreen,
   ProjectDetailsScreen,
   PublicDashboardScreen,
+  // Nuevos componentes
+  DebatesScreen,
+  DebateConfigScreen,
+  DebateDetailsScreenNew,
 } from './components/screens';
 import { useAuthStore, useAnalysisStore } from './store';
 import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
-import { DebateHistory, Project } from './types';
+import { useDebateStore as useUnifiedDebateStore } from './store/debateStoreUnified';
+import { DebateHistory, Project, Debate, DebateMode } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
-import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, Settings } from 'lucide-react';
+import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, Settings, History } from 'lucide-react';
 import './App.css';
 
 type AppScreen = 
@@ -38,15 +44,19 @@ type AppScreen =
   | 'setup' 
   | 'competition' 
   | 'scoring' 
-  | 'projects'
-  | 'project-details'
+  | 'projects'           // LEGACY - mantener durante transición
+  | 'project-details'    // LEGACY - mantener durante transición
   | 'analysis-setup'
   | 'analysis' 
   | 'analysis-results'
   | 'home' 
   | 'debate-details'
   | 'settings'
-  | 'public-dashboard';
+  | 'public-dashboard'
+  // Nuevas pantallas simplificadas
+  | 'debates'            // Reemplaza 'projects'
+  | 'debate-config'      // Nueva pantalla de configuración
+  | 'debate-view';       // Reemplaza 'project-details'
 
 function App() {
   const { checkAuth, isAuthenticated, logout } = useAuthStore();
@@ -58,11 +68,12 @@ function App() {
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
   const [publicDashboardToken, setPublicDashboardToken] = useState<string | null>(null);
   
-  // Proyecto seleccionado para análisis
-  const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
+  // NUEVO: Estados para el sistema simplificado de debates
+  const { currentDebate: selectedUnifiedDebate, selectDebate: selectUnifiedDebate } = useUnifiedDebateStore();
+  const [configMode, setConfigMode] = useState<DebateMode>('live');
   
-  // Proyecto para debate en directo
-  const [liveDebateProject, setLiveDebateProject] = useState<Project | null>(null);
+  // LEGACY: Mantener compatibilidad durante transición
+  const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
 
   // Función para navegar guardando historial
   const navigateTo = (screen: AppScreen) => {
@@ -121,7 +132,44 @@ function App() {
     navigateTo('auth');
   };
 
-  // Dashboard flows
+  // NUEVOS HANDLERS - Flujo simplificado
+  
+  // Handler para iniciar nuevo debate (en vivo)
+  const handleNewLiveDebate = () => {
+    setConfigMode('live');
+    navigateTo('debate-config');
+  };
+
+  // Handler para analizar grabación
+  const handleNewAnalysisDebate = () => {
+    setConfigMode('analysis');
+    navigateTo('debate-config');
+  };
+
+  // Handler cuando se completa la configuración y se inicia el debate
+  const handleDebateConfigured = (debate: Debate) => {
+    selectUnifiedDebate(debate);
+    if (debate.mode === 'live') {
+      navigateTo('competition');
+    } else {
+      navigateTo('analysis');
+    }
+  };
+
+  // Handler para ver lista de debates anteriores
+  const handleViewDebates = () => {
+    navigateTo('debates');
+  };
+
+  // Handler para seleccionar un debate de la lista
+  const handleSelectDebateFromList = (debate: Debate) => {
+    selectUnifiedDebate(debate);
+    navigateTo('debate-view');
+  };
+
+  // LEGACY HANDLERS (mantener durante transición)
+  
+  // Dashboard flows - LEGACY
   const handleNewDebate = () => {
     navigateTo('debate-mode');
   };
@@ -148,13 +196,11 @@ function App() {
     navigateTo('analysis');
   };
 
-
-
   const handleViewHistory = () => {
     navigateTo('home');
   };
 
-  // Debate Mode Selection
+  // Debate Mode Selection - LEGACY
   const handleSelectLiveDebate = () => {
     navigateTo('setup');
   };
@@ -167,7 +213,7 @@ function App() {
     navigateTo('projects');
   };
 
-  // Analysis - Análisis de debates grabados
+  // Analysis
   const handleViewResults = () => {
     navigateTo('analysis-results');
   };
@@ -177,7 +223,7 @@ function App() {
     navigateTo('dashboard');
   };
 
-  // Flujo legacy (mantener para compatibilidad)
+  // Flujo legacy
   const handleStartDebateFromLanding = () => {
     if (isAuthenticated) {
       navigateTo('dashboard');
@@ -232,67 +278,45 @@ function App() {
     }
   };
 
-  // Configurar items del dock
+  // Configurar items del dock - NAVEGACIÓN SIMPLIFICADA Y PREDECIBLE
   const getDockItems = () => {
     const items = [];
     
-    // Botón principal dinámico: Inicio/Panel con comportamiento toggle
-    if (isAuthenticated) {
-      if (currentScreen === 'dashboard') {
-        // En Dashboard: mostrar Inicio (si vuelves a pulsar, va atrás)
-        items.push({
-          icon: <Home className="w-6 h-6 text-white" />,
-          label: 'Inicio',
-          onClick: () => handleNavigationWithConfirm(() => goBack())
-        });
-      } else {
-        // En otras páginas: mostrar Panel (si vuelves a pulsar, va atrás)
-        items.push({
-          icon: <LayoutDashboard className="w-6 h-6 text-white" />,
-          label: 'Panel',
-          onClick: () => handleNavigationWithConfirm(() => goBack())
-        });
-      }
-    } else {
-      // No autenticado: siempre mostrar Inicio
+    // Siempre mostrar: Ir al Dashboard (Panel de Control)
+    // Excepto cuando ya estamos en el Dashboard
+    if (currentScreen !== 'dashboard') {
       items.push({
-        icon: <Home className="w-6 h-6 text-white" />,
-        label: 'Inicio',
-        onClick: () => handleNavigationWithConfirm(() => {
-          if (currentScreen === 'landing') {
-            goBack();
-          } else {
-            handleGoToLanding();
-          }
-        })
+        icon: <LayoutDashboard className="w-6 h-6 text-white" />,
+        label: 'Panel',
+        onClick: () => handleNavigationWithConfirm(() => navigateTo('dashboard'))
       });
     }
 
-    // Nuevo Debate - visible en dashboard y home
-    if (currentScreen === 'dashboard' || currentScreen === 'home') {
+    // Nuevo Debate - visible desde dashboard o debates
+    if (currentScreen === 'dashboard' || currentScreen === 'debates') {
       items.push({
         icon: <Plus className="w-6 h-6 text-white" />,
         label: 'Nuevo Debate',
-        onClick: () => handleNewDebate()
+        onClick: () => handleNewLiveDebate()
       });
     }
 
-    // Mis Proyectos - visible SOLO cuando está en el Panel de Control
-    if (isAuthenticated && currentScreen === 'dashboard') {
+    // Debates Anteriores - visible cuando NO estamos ya en esa pantalla
+    if (isAuthenticated && currentScreen !== 'debates') {
       items.push({
-        icon: <FolderOpen className="w-6 h-6 text-white" />,
-        label: 'Mis Proyectos',
-        onClick: () => navigateTo('projects')
+        icon: <History className="w-6 h-6 text-white" />,
+        label: 'Debates',
+        onClick: () => handleViewDebates()
       });
     }
 
-    // Configuración del perfil (con comportamiento toggle)
+    // Configuración del perfil - toggle
     items.push({
       icon: <Settings className="w-6 h-6 text-white" />,
       label: 'Configuración',
       onClick: () => handleNavigationWithConfirm(() => {
         if (currentScreen === 'settings') {
-          goBack();
+          navigateTo('dashboard');
         } else {
           navigateTo('settings');
         }
@@ -308,6 +332,9 @@ function App() {
     'home', 
     'projects',
     'project-details',
+    'debates',           // NUEVO
+    'debate-config',     // NUEVO
+    'debate-view',       // NUEVO
     'analysis', 
     'analysis-results',
     'setup', 
@@ -351,6 +378,10 @@ function App() {
             onNewDebate={handleNewDebate}
             onAnalyzeRecorded={handleAnalyzeRecorded}
             onViewHistory={handleViewHistory}
+            // Nuevos handlers
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
+            onViewDebates={handleViewDebates}
           />
         );
 
@@ -388,17 +419,61 @@ function App() {
         );
 
       case 'analysis':
-        return selectedAnalysisProject ? (
+        return selectedUnifiedDebate ? (
+          <AnalysisScreen
+            debate={selectedUnifiedDebate}
+            onBack={() => navigateTo('debates')}
+            onViewResults={handleViewResults}
+          />
+        ) : selectedAnalysisProject ? (
+          // LEGACY: Soporte para proyectos antiguos
           <AnalysisScreen
             project={selectedAnalysisProject}
             onBack={() => navigateTo('project-details')}
             onViewResults={handleViewResults}
           />
         ) : (
-          <ProjectsScreen
-            onSelectProject={handleSelectProject}
-            onStartLiveDebate={handleStartLiveDebate}
+          <DebatesScreen
+            onSelectDebate={handleSelectDebateFromList}
             onBack={handleGoToDashboard}
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
+          />
+        );
+
+      // NUEVAS PANTALLAS SIMPLIFICADAS
+      case 'debates':
+        return (
+          <DebatesScreen
+            onSelectDebate={handleSelectDebateFromList}
+            onBack={handleGoToDashboard}
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
+          />
+        );
+
+      case 'debate-config':
+        return (
+          <DebateConfigScreen
+            mode={configMode}
+            onBack={handleGoToDashboard}
+            onStartLive={handleDebateConfigured}
+            onStartAnalysis={handleDebateConfigured}
+          />
+        );
+
+      case 'debate-view':
+        return selectedUnifiedDebate ? (
+          <DebateDetailsScreenNew
+            debate={selectedUnifiedDebate}
+            onBack={() => navigateTo('debates')}
+          />
+        ) : (
+          <DebatesScreen
+            onSelectDebate={handleSelectDebateFromList}
+            onBack={handleGoToDashboard}
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -422,17 +497,25 @@ function App() {
         return <SetupScreen onStartDebate={handleStartDebate} onBack={handleGoToDashboard} />;
 
       case 'competition':
-        return selectedAnalysisProject ? (
+        return selectedUnifiedDebate ? (
+          <CompetitionScreen 
+            debate={selectedUnifiedDebate} 
+            onFinish={handleFinishDebate}
+            onBack={() => navigateTo('debates')}
+          />
+        ) : selectedAnalysisProject ? (
+          // LEGACY: Soporte para proyectos antiguos
           <CompetitionScreen 
             project={selectedAnalysisProject} 
             onFinish={handleFinishDebate}
             onBack={() => navigateTo('project-details')}
           />
         ) : (
-          <ProjectsScreen
-            onSelectProject={handleSelectProject}
-            onStartLiveDebate={handleStartLiveDebate}
+          <DebatesScreen
+            onSelectDebate={handleSelectDebateFromList}
             onBack={handleGoToDashboard}
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -441,7 +524,7 @@ function App() {
 
       case 'debate-details':
         return selectedDebate ? (
-          <DebateDetailsScreen debate={selectedDebate} onBack={handleBackToHome} />
+          <LegacyDebateDetailsScreen debate={selectedDebate} onBack={handleBackToHome} />
         ) : (
           <HomeScreen onNewDebate={handleNewDebate} onViewDebate={handleViewDebate} onBack={handleGoToDashboard} />
         );

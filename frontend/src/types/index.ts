@@ -91,8 +91,90 @@ export interface TeamScore {
   total: number;
 }
 
+// TIPOS UNIFICADOS PARA SIMPLIFICACIÓN - NUEVO MODELO
+// =============================================================================
+
 /**
- * Historial de debate completado
+ * Modo de debate: en vivo o análisis de grabación
+ */
+export type DebateMode = 'live' | 'analysis';
+
+/**
+ * Estado del debate
+ */
+export type DebateStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled';
+
+/**
+ * Entidad principal unificada: Debate
+ * Reemplaza a Project y DebateHistory
+ */
+export interface Debate {
+  // Identificación
+  code: string;
+  name: string;
+  description?: string;
+  
+  // Configuración
+  debate_type: string;
+  debate_type_name?: string;
+  team_a_name: string;
+  team_b_name: string;
+  debate_topic: string;
+  
+  // Modo y estado
+  mode: DebateMode;
+  status: DebateStatus;
+  
+  // Usuario
+  user_code: string;
+  
+  // Timestamps
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  
+  // Resultados (opcional, solo para debates completados)
+  winner?: TeamPosition | 'draw';
+  scores?: TeamScore[];
+  summary?: string;
+  duration?: number;
+  
+  // Conteo de segmentos/análisis
+  segments_count?: number;
+  average_score?: number;
+}
+
+/**
+ * Datos para crear un nuevo debate
+ */
+export interface CreateDebateData {
+  name: string;
+  description?: string;
+  debate_type: string;
+  team_a_name: string;
+  team_b_name: string;
+  debate_topic: string;
+  mode: DebateMode;
+}
+
+/**
+ * Legacy types - mantener para compatibilidad durante transición
+ * @deprecated Use Debate instead
+ */
+export interface Project {
+  code: string;
+  name: string;
+  description: string;
+  debate_type: string;
+  user_code: string;
+  created_at?: string;
+  team_a_name?: string;
+  team_b_name?: string;
+  debate_topic?: string;
+}
+
+/**
+ * @deprecated Use Debate instead
  */
 export interface DebateHistory {
   id: string;
@@ -256,6 +338,7 @@ export interface FaseConfig {
 
 /**
  * Proyecto de debate
+ * @deprecated Use Debate instead
  */
 export interface Project {
   code: string;
@@ -420,6 +503,7 @@ export interface AuthResponse {
 
 /**
  * Datos para crear proyecto
+ * @deprecated Use CreateDebateData instead
  */
 export interface CreateProjectData {
   name: string;
