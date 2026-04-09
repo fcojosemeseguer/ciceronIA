@@ -21,19 +21,19 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   timeRemaining,
 }) => {
   const isTeamA = teamId === 'A';
-  const isOvertime = timeRemaining < 0;
+  const isOvertime = isActive && timeRemaining < 0;
   const accentColor = isTeamA ? '#FF6B00' : '#00E5FF';
   const sideLabel = isTeamA ? 'A favor' : 'En contra';
   const timerValue = isActive ? formatTime(timeRemaining) : '00:00';
 
   return (
     <section
-      className="relative flex min-h-[420px] flex-1 flex-col justify-between overflow-hidden rounded-[30px] border px-6 py-6 sm:px-8 sm:py-8"
+      className={`live-panel live-animate-in relative flex min-h-[420px] flex-1 flex-col justify-between overflow-hidden rounded-[30px] px-6 py-6 sm:px-8 sm:py-8 ${isActive ? 'live-glow-pulse' : ''}`}
       style={{
-        borderColor: isActive ? `${accentColor}78` : 'rgba(255,255,255,0.08)',
+        borderColor: isActive ? `${accentColor}78` : 'var(--app-border)',
         background: `linear-gradient(180deg, ${isActive
           ? isTeamA ? 'rgba(255,107,0,0.20)' : 'rgba(0,229,255,0.20)'
-          : isTeamA ? 'rgba(255,107,0,0.06)' : 'rgba(0,229,255,0.06)'} 0%, rgba(15,23,42,0.92) 38%, rgba(15,23,42,1) 100%)`,
+          : isTeamA ? 'rgba(255,107,0,0.06)' : 'rgba(0,229,255,0.06)'} 0%, color-mix(in srgb, var(--app-bg-solid) 86%, transparent) 38%, color-mix(in srgb, var(--app-bg-solid) 96%, transparent) 100%)`,
         boxShadow: isActive
           ? `0 28px 70px rgba(2, 6, 23, 0.46), 0 0 0 1px ${accentColor}30 inset, 0 0 36px ${accentColor}22`
           : '0 18px 44px rgba(2, 6, 23, 0.28)',
@@ -51,7 +51,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
           {sideLabel}
         </span>
 
-        <h2 className="mt-5 break-words text-3xl font-semibold text-white sm:text-4xl">
+        <h2 className="mt-5 break-words text-3xl font-semibold sm:text-4xl" style={{ color: 'var(--app-text)' }}>
           {teamName}
         </h2>
       </div>
@@ -59,8 +59,15 @@ export const TeamCard: React.FC<TeamCardProps> = ({
       <div className="flex flex-1 items-center justify-center">
         <div
           className={`text-center text-7xl font-semibold tracking-tight sm:text-8xl lg:text-[7.5rem] ${
-            isOvertime ? 'animate-pulse text-red-400' : isActive ? 'text-white' : 'text-white/22'
+            isOvertime ? 'animate-pulse text-red-400' : ''
           }`}
+          style={{
+            color: isOvertime
+              ? undefined
+              : isActive
+                ? 'var(--app-text)'
+                : 'color-mix(in srgb, var(--app-text) 24%, transparent)',
+          }}
         >
           {timerValue}
         </div>

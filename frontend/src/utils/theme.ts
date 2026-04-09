@@ -1,16 +1,17 @@
-export type AppTheme = 'obsidian' | 'graphite' | 'ocean' | 'paper';
+export type AppTheme = 'apple' | 'obsidian' | 'graphite' | 'ocean' | 'paper';
 
-export const DEFAULT_THEME: AppTheme = 'obsidian';
+export const DEFAULT_THEME: AppTheme = 'apple';
 
 export const THEME_OPTIONS: Array<{
   id: AppTheme;
   label: string;
   description: string;
 }> = [
+  { id: 'apple', label: 'Apple Light', description: 'Claro, limpio y con vidrio suave.' },
   { id: 'obsidian', label: 'Obsidian', description: 'Oscuro profundo y sobrio.' },
   { id: 'graphite', label: 'Graphite', description: 'Grises limpios y contraste suave.' },
-  { id: 'ocean', label: 'Ocean', description: 'Azules fríos con ambiente técnico.' },
-  { id: 'paper', label: 'Paper', description: 'Claro, limpio y más editorial.' },
+  { id: 'ocean', label: 'Ocean', description: 'Azules frios con ambiente tecnico.' },
+  { id: 'paper', label: 'Paper', description: 'Claro, limpio y mas editorial.' },
 ];
 
 export const applyTheme = (theme: AppTheme) => {

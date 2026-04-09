@@ -70,14 +70,17 @@ function DockItem({
       ref={ref}
       style={{
         width: size,
-        height: size
+        height: size,
+        background: 'var(--glass-bg-strong)',
+        borderColor: 'var(--glass-border)',
+        boxShadow: '0 12px 24px rgba(15, 23, 42, 0.14)',
       }}
       onHoverStart={() => isHovered.set(1)}
       onHoverEnd={() => isHovered.set(0)}
       onFocus={() => isHovered.set(1)}
       onBlur={() => isHovered.set(0)}
       onClick={onClick}
-      className={`relative inline-flex items-center justify-center rounded-full bg-slate-950/95 border border-white/10 shadow-[0_12px_24px_rgba(2,6,23,0.35)] cursor-pointer ${className}`}
+      className={`relative inline-flex items-center justify-center rounded-full border cursor-pointer ${className}`}
       tabIndex={0}
       role="button"
       aria-haspopup="true"
@@ -116,9 +119,9 @@ function DockLabel({ children, className = '', isHovered }: DockLabelProps) {
           animate={{ opacity: 1, y: -10 }}
           exit={{ opacity: 0, y: 0 }}
           transition={{ duration: 0.2 }}
-          className={`${className} absolute -top-7 left-1/2 w-fit whitespace-pre rounded-md border border-white/10 bg-slate-950/95 px-2 py-1 text-xs text-white`}
+          className={`${className} absolute -top-7 left-1/2 w-fit whitespace-pre rounded-md border px-2 py-1 text-xs`}
+          style={{ background: 'var(--glass-bg-strong)', borderColor: 'var(--glass-border)', color: 'var(--app-text)', x: '-50%' }}
           role="tooltip"
-          style={{ x: '-50%' }}
         >
           {children}
         </motion.div>
@@ -166,7 +169,8 @@ export default function Dock({
       }}
     >
       <motion.div
-        className={`${className} flex items-end gap-4 px-4 pb-3 bg-slate-950/72 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(2,6,23,0.32)]`}
+        className={`${className} flex items-end gap-4 px-4 pb-3 backdrop-blur-xl border rounded-2xl`}
+        style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)', boxShadow: '0 20px 40px rgba(15, 23, 42, 0.16)' }}
       >
         {items.map((item, index) => (
           <DockItem
@@ -206,22 +210,22 @@ export function useDock({
 }) {
   const items: DockItemData[] = [
     {
-      icon: <Home size={20} className="text-white" />,
+      icon: <Home size={20} style={{ color: 'var(--app-text)' }} />,
       label: 'Inicio',
       onClick: () => onGoHome?.()
     },
     {
-      icon: <ArrowLeft size={20} className="text-white" />,
+      icon: <ArrowLeft size={20} style={{ color: 'var(--app-text)' }} />,
       label: 'Volver',
       onClick: () => onGoBack?.()
     },
     {
-      icon: <User size={20} className="text-white" />,
+      icon: <User size={20} style={{ color: 'var(--app-text)' }} />,
       label: 'Perfil',
       onClick: () => onProfile?.()
     },
     {
-      icon: <Settings size={20} className="text-white" />,
+      icon: <Settings size={20} style={{ color: 'var(--app-text)' }} />,
       label: 'Configuración',
       onClick: () => onSettings?.()
     }

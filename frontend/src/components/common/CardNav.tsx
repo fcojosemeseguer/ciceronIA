@@ -39,8 +39,8 @@ const CardNav: React.FC<CardNavProps> = ({
   ease = 'power3.out',
   baseColor = '#fff',
   menuColor,
-  buttonBgColor = '#111',
-  buttonTextColor = '#fff',
+  buttonBgColor = 'var(--app-surface-strong)',
+  buttonTextColor = 'var(--app-text)',
   onLogin,
   onNavigate,
   onSettingsClick,
@@ -188,8 +188,8 @@ const CardNav: React.FC<CardNavProps> = ({
     <div className={`card-nav-container fixed left-1/2 -translate-x-1/2 w-[92%] max-w-[820px] z-[99] top-[0.8em] md:top-[1.2em] ${className}`}>
       <nav
         ref={navRef}
-        className="block h-[60px] rounded-xl shadow-[0_18px_48px_rgba(2,6,23,0.38)] relative overflow-visible will-change-[height] backdrop-blur-xl bg-slate-950/60 border border-white/10"
-        style={{ backgroundColor: baseColor }}
+        className="block h-[60px] rounded-xl relative overflow-visible will-change-[height] backdrop-blur-xl border"
+        style={{ background: baseColor === '#fff' ? 'var(--glass-bg)' : baseColor, borderColor: 'var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}
       >
         <div className="card-nav-top absolute inset-x-0 top-0 h-[60px] flex items-center justify-between gap-3 p-2 pl-4 pr-3 z-[2]">
           <div
@@ -198,7 +198,7 @@ const CardNav: React.FC<CardNavProps> = ({
             role="button"
             aria-label={isExpanded ? 'Cerrar menu' : 'Abrir menu'}
             tabIndex={0}
-            style={{ color: menuColor || '#fff' }}
+            style={{ color: menuColor || 'var(--app-text)' }}
           >
             <div
               className={`hamburger-line w-[30px] h-[2px] bg-current transition-[transform,opacity,margin] duration-300 ease-linear [transform-origin:50%_50%] ${
@@ -216,7 +216,7 @@ const CardNav: React.FC<CardNavProps> = ({
             <div className="w-8 h-8 flex items-center justify-center shrink-0">
               <img src="/logo.svg" alt={logoAlt} className="w-full h-full object-contain" />
             </div>
-            <span className="text-lg font-bold text-white tracking-tight hidden sm:block">
+            <span className="text-lg font-bold tracking-tight hidden sm:block" style={{ color: 'var(--app-text)' }}>
               CiceronIA
             </span>
           </div>
@@ -226,24 +226,25 @@ const CardNav: React.FC<CardNavProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowUserDropdown((prev) => !prev)}
-                  className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/15 transition-all duration-300"
+                  className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg border transition-all duration-300"
+                  style={{ background: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
                 >
-                  <div className="w-7 h-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-white font-semibold text-xs">
+                  <div className="w-7 h-7 rounded-full border flex items-center justify-center font-semibold text-xs" style={{ background: 'var(--app-surface-strong)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}>
                     {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
                   </div>
-                  <span className="hidden sm:block text-white/90 text-sm font-medium max-w-[110px] truncate">
+                  <span className="hidden sm:block text-sm font-medium max-w-[110px] truncate" style={{ color: 'var(--app-text)' }}>
                     {user.name || user.email}
                   </span>
-                  <ChevronDown className={`w-4 h-4 text-white/60 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} style={{ color: 'var(--app-text-muted)' }} />
                 </button>
 
                 {showUserDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-56 backdrop-blur-xl bg-slate-950/92 border border-white/10 rounded-xl shadow-[0_18px_48px_rgba(2,6,23,0.42)] overflow-hidden z-50">
-                      <div className="p-3 border-b border-white/10">
-                        <p className="text-white font-medium text-sm truncate">{user.name}</p>
-                        <p className="text-white/50 text-xs truncate">{user.email}</p>
+                    <div className="absolute right-0 top-full mt-2 w-56 backdrop-blur-xl border rounded-xl overflow-hidden z-50" style={{ background: 'var(--glass-bg-strong)', borderColor: 'var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                      <div className="p-3 border-b" style={{ borderColor: 'var(--app-border)' }}>
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--app-text)' }}>{user.name}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--app-text-muted)' }}>{user.email}</p>
                       </div>
                       {onSettingsClick && (
                         <button
@@ -251,9 +252,10 @@ const CardNav: React.FC<CardNavProps> = ({
                             onSettingsClick();
                             setShowUserDropdown(false);
                           }}
-                          className="w-full px-4 py-3 flex items-center gap-2 text-white/85 hover:bg-white/5 transition-colors text-sm"
+                          className="w-full px-4 py-3 flex items-center gap-2 hover:opacity-80 transition-colors text-sm"
+                          style={{ color: 'var(--app-text)' }}
                         >
-                          <Settings className="w-4 h-4 text-white/70" />
+                          <Settings className="w-4 h-4" style={{ color: 'var(--app-text-muted)' }} />
                           <span>Configuracion</span>
                         </button>
                       )}
@@ -334,7 +336,7 @@ const CardNav: React.FC<CardNavProps> = ({
           {user && (
             <div
               className="nav-card select-none relative flex flex-col gap-2 p-[12px_16px] rounded-[calc(0.75rem-0.2rem)] min-w-0 flex-[1_1_auto] h-auto min-h-[60px] sm:hidden"
-              style={{ backgroundColor: '#0f172a', color: '#fff' }}
+              style={{ background: 'var(--app-surface)', color: 'var(--app-text)' }}
             >
               <div className="nav-card-label font-normal tracking-[-0.5px] text-[18px]">
                 Sesion

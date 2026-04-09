@@ -43,21 +43,16 @@ export const CentralPanel: React.FC<CentralPanelProps> = ({
 
   return (
     <section
-      className="mx-auto flex min-h-[420px] w-full max-w-[360px] flex-col justify-between rounded-[30px] border px-6 py-6 sm:px-8 sm:py-8"
-      style={{
-        borderColor: 'rgba(255,255,255,0.08)',
-        background: 'linear-gradient(180deg, rgba(30,41,59,0.96) 0%, rgba(15,23,42,0.98) 100%)',
-        boxShadow: '0 24px 60px rgba(2, 6, 23, 0.38)',
-      }}
+      className="live-panel live-animate-delayed mx-auto flex min-h-[420px] w-full max-w-[360px] flex-col justify-between rounded-[30px] px-6 py-6 sm:px-8 sm:py-8"
     >
       <div className="text-center">
-        <h2 className="text-2xl font-semibold leading-tight text-white sm:text-[1.9rem]">{debateTopic}</h2>
+        <h2 className="text-2xl font-semibold leading-tight sm:text-[1.9rem]" style={{ color: 'var(--app-text)' }}>{debateTopic}</h2>
         <div className="mt-5 flex items-center justify-center gap-3 text-sm">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+          <span className="live-chip rounded-full px-3 py-1">
             {currentRoundType || 'Preparacion'}
           </span>
-          <span className="text-white/35">•</span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+          <span style={{ color: 'var(--app-text-muted)' }}>•</span>
+          <span className="live-chip rounded-full px-3 py-1">
             Ronda {roundNumber}/{totalRounds}
           </span>
         </div>
@@ -85,9 +80,14 @@ export const CentralPanel: React.FC<CentralPanelProps> = ({
             disabled={isFinished}
             className={`flex h-16 w-full items-center justify-center rounded-2xl border text-white transition-colors ${
               isFinished
-                ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/30'
-                : 'border-white/16 bg-white/6 hover:bg-white/10'
+                ? 'cursor-not-allowed'
+                : ''
             }`}
+            style={{
+              borderColor: isFinished ? 'var(--app-border)' : 'color-mix(in srgb, var(--app-text) 20%, transparent)',
+              background: isFinished ? 'var(--app-surface)' : 'color-mix(in srgb, var(--app-surface-strong) 84%, transparent)',
+              color: isFinished ? 'color-mix(in srgb, var(--app-text) 40%, transparent)' : 'var(--app-text)',
+            }}
           >
             {isRunning ? <Pause size={26} /> : <Play size={26} />}
           </button>

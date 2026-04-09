@@ -39,31 +39,35 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
             relative
             overflow-visible
             backdrop-blur-xl
-            bg-slate-950/60
-            border border-white/10
+            border
             rounded-2xl
-            shadow-[0_18px_48px_rgba(2,6,23,0.38)]
           "
+          style={{
+            background: 'var(--glass-bg)',
+            borderColor: 'var(--glass-border)',
+            boxShadow: 'var(--glass-shadow)',
+          }}
         >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent" />
 
           <div className="relative px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
             <button
               onClick={onTitleClick}
               className={`flex items-center gap-3 min-w-0 ${onTitleClick ? 'cursor-pointer hover:opacity-90 transition-opacity' : 'cursor-default'}`}
             >
-              <div className="w-10 h-10 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0" style={{ background: 'var(--app-surface-strong)', borderColor: 'var(--app-border)' }}>
                 <svg
                   viewBox="0 0 24 24"
-                  className="w-6 h-6 text-white/90"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
+                  style={{ color: 'var(--app-text)' }}
                 >
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">
+              <span className="text-lg sm:text-xl font-bold tracking-tight truncate" style={{ color: 'var(--app-text)' }}>
                 {title}
               </span>
             </button>
@@ -79,29 +83,30 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
                       flex items-center gap-2
                       px-3 py-2
                       rounded-xl
-                      bg-white/[0.04]
-                      hover:bg-white/[0.07]
-                      border border-white/10
-                      hover:border-white/15
+                      border
                       transition-all duration-300
                     "
+                    style={{
+                      background: 'var(--app-surface)',
+                      borderColor: 'var(--app-border)',
+                    }}
                   >
-                    <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-white font-semibold text-sm">
+                    <div className="w-8 h-8 rounded-full border flex items-center justify-center font-semibold text-sm" style={{ background: 'var(--app-surface-strong)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}>
                       {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-white/90 text-sm font-medium max-w-[150px] truncate">
+                    <span className="text-sm font-medium max-w-[150px] truncate" style={{ color: 'var(--app-text)' }}>
                       {user.name || user.email}
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-white/60 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} style={{ color: 'var(--app-text-muted)' }} />
                   </button>
 
                   {showUserDropdown && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)} />
-                      <div className="absolute right-0 top-full mt-2 w-60 backdrop-blur-xl bg-slate-950/92 border border-white/10 rounded-xl shadow-[0_18px_48px_rgba(2,6,23,0.42)] overflow-hidden z-50">
-                        <div className="p-4 border-b border-white/10">
-                          <p className="text-white font-medium truncate">{user.name}</p>
-                          <p className="text-white/50 text-sm truncate">{user.email}</p>
+                      <div className="absolute right-0 top-full mt-2 w-60 backdrop-blur-xl border rounded-xl overflow-hidden z-50" style={{ background: 'var(--glass-bg-strong)', borderColor: 'var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                        <div className="p-4 border-b" style={{ borderColor: 'var(--app-border)' }}>
+                          <p className="font-medium truncate" style={{ color: 'var(--app-text)' }}>{user.name}</p>
+                          <p className="text-sm truncate" style={{ color: 'var(--app-text-muted)' }}>{user.email}</p>
                         </div>
                         {onSettingsClick && (
                           <button
@@ -109,9 +114,10 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
                               onSettingsClick();
                               setShowUserDropdown(false);
                             }}
-                            className="w-full px-4 py-3 flex items-center gap-3 text-white/85 hover:bg-white/5 transition-colors"
+                            className="w-full px-4 py-3 flex items-center gap-3 transition-colors hover:opacity-80"
+                            style={{ color: 'var(--app-text)' }}
                           >
-                            <Settings className="w-4 h-4 text-white/70" />
+                            <Settings className="w-4 h-4" style={{ color: 'var(--app-text-muted)' }} />
                             <span>Configuracion</span>
                           </button>
                         )}
@@ -130,7 +136,8 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
 
               <button
                 onClick={() => setIsMenuOpen((prev) => !prev)}
-                className="md:hidden p-2 text-white/70 hover:text-white transition-colors"
+                className="md:hidden p-2 transition-colors"
+                style={{ color: 'var(--app-text-muted)' }}
                 aria-label={isMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
               >
                 {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -139,7 +146,7 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
           </div>
 
           {isMenuOpen && (
-            <div className="md:hidden border-t border-white/10 backdrop-blur-xl bg-slate-950/70 px-4 py-4">
+            <div className="md:hidden border-t backdrop-blur-xl px-4 py-4" style={{ borderColor: 'var(--app-border)', background: 'var(--glass-bg)' }}>
               {showUserMenu && user ? (
                 <div className="space-y-3">
                   {onSettingsClick && (
@@ -148,19 +155,21 @@ export const GlassNavbar: React.FC<GlassNavbarProps> = ({
                         onSettingsClick();
                         setIsMenuOpen(false);
                       }}
-                      className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-white/85 hover:bg-white/10 transition-colors"
+                      className="w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors"
+                      style={{ borderColor: 'var(--app-border)', background: 'var(--app-surface)', color: 'var(--app-text)' }}
                     >
-                      <Settings className="w-4 h-4 text-white/70" />
+                      <Settings className="w-4 h-4" style={{ color: 'var(--app-text-muted)' }} />
                       <span className="text-sm">Configuracion</span>
                     </button>
                   )}
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left hover:bg-white/10 transition-colors"
+                    className="w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors"
+                    style={{ borderColor: 'var(--app-border)', background: 'var(--app-surface)' }}
                   >
                     <div className="min-w-0">
-                      <p className="text-white font-medium truncate">{user.name || user.email}</p>
-                      <p className="text-white/50 text-sm truncate">{user.email}</p>
+                      <p className="font-medium truncate" style={{ color: 'var(--app-text)' }}>{user.name || user.email}</p>
+                      <p className="text-sm truncate" style={{ color: 'var(--app-text-muted)' }}>{user.email}</p>
                     </div>
                     <div className="flex items-center gap-2 text-red-300 shrink-0">
                       <LogOut className="w-4 h-4" />
