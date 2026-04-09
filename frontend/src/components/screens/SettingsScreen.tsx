@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useMicrophoneTest } from '../../hooks/useMicrophoneTest';
 import { LiquidGlassButton } from '../common';
+import { AppTheme, applyTheme, DEFAULT_THEME, THEME_OPTIONS } from '../../utils/theme';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -29,12 +30,12 @@ interface SettingsScreenProps {
 
 interface AppSettings {
   notificationSounds: boolean;
-  theme: 'dark' | 'light' | 'system';
+  theme: AppTheme;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   notificationSounds: true,
-  theme: 'dark',
+  theme: DEFAULT_THEME,
 };
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
@@ -63,7 +64,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     const savedSettings = localStorage.getItem('ciceron_settings');
     if (savedSettings) {
       try {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) });
+        const merged = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+        setSettings(merged);
+        applyTheme(merged.theme);
       } catch {
         console.error('Error loading settings');
       }
@@ -79,6 +82,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const saveSettings = () => {
     localStorage.setItem('ciceron_settings', JSON.stringify(settings));
     localStorage.setItem('ciceron_username', username);
+    applyTheme(settings.theme);
     setSaveMessage('Configuración guardada correctamente');
     setTimeout(() => setSaveMessage(''), 3000);
   };
@@ -107,6 +111,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       localStorage.clear();
       setUsername('');
       setSettings(DEFAULT_SETTINGS);
+      applyTheme(DEFAULT_SETTINGS.theme);
       setSaveMessage('Todos los datos han sido eliminados');
       setTimeout(() => setSaveMessage(''), 3000);
     }
@@ -121,18 +126,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto pb-32">
+    <div className="app-shell overflow-y-auto pb-32">
       {/* Header */}
       <div className="pt-20 pb-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 flex items-center justify-center border border-white/10">
+              <div className="app-panel-strong w-12 h-12 rounded-2xl flex items-center justify-center">
                 <Settings className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-3xl sm:text-4xl font-bold text-white">Configuración</h1>
-                <p className="text-white/60">Personaliza tu experiencia</p>
+              <p className="app-text-muted">Personaliza tu experiencia</p>
               </div>
             </div>
             
@@ -155,7 +160,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sidebar - Tabs */}
             <div className="lg:col-span-1">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-2">
+              <div className="app-panel rounded-2xl p-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -181,7 +186,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 
             {/* Content */}
             <div className="lg:col-span-3">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+              <div className="app-panel rounded-2xl p-6 sm:p-8">
                 
                 {/* Perfil Tab */}
                 {activeTab === 'profile' && (
@@ -376,7 +381,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
                     </h2>
                     
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
                         <div className="flex items-center gap-3">
                           <Bell className="w-5 h-5 text-white/60" />
                           <div>
@@ -396,17 +401,36 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
                         </button>
                       </div>
 
-                      <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                         <div className="flex items-center gap-3">
                           <Moon className="w-5 h-5 text-white/60" />
                           <div>
-                            <p className="text-white font-medium">Tema oscuro</p>
-                            <p className="text-white/50 text-sm">Interfaz siempre en modo oscuro</p>
+                            <p className="text-white font-medium">Tema visual</p>
+                            <p className="text-white/50 text-sm">Elige la paleta base de toda la aplicación</p>
                           </div>
                         </div>
-                        <span className="px-3 py-1 bg-white/10 rounded-full text-white/60 text-sm">
-                          Predeterminado
-                        </span>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {THEME_OPTIONS.map((themeOption) => (
+                            <button
+                              key={themeOption.id}
+                              onClick={() => {
+                                setSettings({ ...settings, theme: themeOption.id });
+                                applyTheme(themeOption.id);
+                              }}
+                              className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
+                                settings.theme === themeOption.id
+                                  ? 'border-white/30 bg-white/10 text-white'
+                                  : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/8'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold">{themeOption.label}</span>
+                                <span className="h-3 w-3 rounded-full bg-white/65" />
+                              </div>
+                              <p className="mt-2 text-xs text-white/50">{themeOption.description}</p>
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       <div className="pt-4">

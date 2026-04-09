@@ -25,10 +25,15 @@ export const AnalysisSetupScreen: React.FC<AnalysisSetupScreenProps> = ({
   const { debateTypes, selectedDebateType, selectDebateType, fetchDebateTypes } = useProjectStore();
   const [error, setError] = useState('');
   const [selectedType, setSelectedType] = useState('upct');
+  const scrollToTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const [formData, setFormData] = useState({
-    teamAName: 'Equipo A',
-    teamBName: 'Equipo B',
+    teamAName: 'A favor',
+    teamBName: 'En contra',
     debateTopic: '',
   });
 
@@ -50,16 +55,19 @@ export const AnalysisSetupScreen: React.FC<AnalysisSetupScreenProps> = ({
   const handleStart = () => {
     if (!formData.debateTopic.trim()) {
       setError('Debes ingresar un tema para el debate');
+      scrollToTop();
       return;
     }
     
     if (!formData.teamAName.trim()) {
-      setError('Debes ingresar el nombre del Equipo A');
+      setError('Debes ingresar el nombre de la postura a favor');
+      scrollToTop();
       return;
     }
     
     if (!formData.teamBName.trim()) {
-      setError('Debes ingresar el nombre del Equipo B');
+      setError('Debes ingresar el nombre de la postura en contra');
+      scrollToTop();
       return;
     }
     
@@ -115,27 +123,27 @@ export const AnalysisSetupScreen: React.FC<AnalysisSetupScreenProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[#FF6B00] text-sm font-medium mb-2">
-                      Equipo A (A favor)
+                      A favor
                     </label>
                     <input
                       type="text"
                       value={formData.teamAName}
                       onChange={(e) => handleInputChange(e, 'teamAName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF6B00]/50 transition-colors"
-                      placeholder="Nombre del equipo"
+                      placeholder="Nombre de la postura a favor"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[#00E5FF] text-sm font-medium mb-2">
-                      Equipo B (En contra)
+                      En contra
                     </label>
                     <input
                       type="text"
                       value={formData.teamBName}
                       onChange={(e) => handleInputChange(e, 'teamBName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                      placeholder="Nombre del equipo"
+                      placeholder="Nombre de la postura en contra"
                     />
                   </div>
                 </div>
@@ -192,11 +200,7 @@ export const AnalysisSetupScreen: React.FC<AnalysisSetupScreenProps> = ({
                         }`}
                       >
                         <div className="flex items-start gap-4">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            type.id === 'upct' 
-                              ? 'bg-gradient-to-br from-blue-500 to-cyan-600' 
-                              : 'bg-gradient-to-br from-orange-500 to-red-600'
-                          }`}>
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-white/20 to-white/5 border border-white/10">
                             <span className="text-white font-bold text-lg">{type.id === 'upct' ? 'A' : 'R'}</span>
                           </div>
                           

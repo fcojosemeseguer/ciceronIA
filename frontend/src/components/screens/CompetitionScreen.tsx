@@ -1,26 +1,36 @@
 /**
- * CompetitionScreen - Pantalla principal del debate
- * Estilo Aurora con colores naranja/cian
+ * CompetitionScreen - Pantalla minimalista del debate en vivo.
  */
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateTimer } from '../../hooks/useDebateTimer';
 import { useAutoAudioRecording } from '../../hooks/useAutoAudioRecording';
 import { useRealtimeAnalysis } from '../../hooks/useRealtimeAnalysis';
 import { TeamCard, CentralPanel } from '../common';
-import { Mic, MicOff, Loader2, CheckCircle, AlertCircle, BarChart3, ArrowLeft, Play, X, FileAudio } from 'lucide-react';
-import { AudioRecording, AnalysisResult, Project, Debate } from '../../types';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Mic,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { AudioRecording, AnalysisResult, Debate, Project } from '../../types';
 
 interface CompetitionScreenProps {
-  project?: Project;  // LEGACY - mantener durante transición
-  debate?: Debate;    // NUEVO - usar este preferentemente
+  project?: Project;
+  debate?: Debate;
   onFinish?: () => void;
   onBack?: () => void;
 }
 
+const formatCompactScore = (value: number) => (Number.isFinite(value) ? value.toFixed(1) : '0.0');
+const normalizePosture = (postura: string) => (postura.toLowerCase().includes('favor') ? 'A Favor' : 'En Contra');
+const formatDuration = (seconds: number) => `${Math.round((seconds || 0) / 60)} min`;
+
 export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, debate, onFinish, onBack }) => {
-  // Todos los hooks primero
   const {
     config,
     state,
@@ -36,90 +46,139 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, d
     finishDebate,
     getCurrentRound,
     getTeamName,
-    canGoToNextRound,
-    canGoToPreviousRound,
     isLastRound,
     canNavigateToTeamATurn,
     canNavigateToTeamBTurn,
     addAnalysisResult,
+    updateAnalysisQueueStatus,
     initializeDebateFromProject,
     initializeDebate,
+    recordings,
+    analysisResults,
   } = useDebateStore();
 
-  // Estado para el panel de resultados
-  const [showResultsPanel, setShowResultsPanel] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [currentRecording, setCurrentRecording] = useState<AudioRecording | null>(null);
   const [isAnalyzingCurrent, setIsAnalyzingCurrent] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [expandedAnalysisIndex, setExpandedAnalysisIndex] = useState<number | null>(0);
 
-  // Usar debate si está disponible, sino project (legacy)
   const debateData = debate || project;
-  
-  // Extraer valores del debate/proyecto
   const debateTypeId = debate?.debate_type || project?.debate_type || 'upct';
-  
-  // Hook para análisis en tiempo real
-  const handleAnalysisComplete = useCallback((result: AnalysisResult) => {
+
+  const handleAnalysisComplete = useCallback((result: AnalysisResult, recording: AudioRecording) => {
     addAnalysisResult(result);
-    setAnalysisResults(prev => [...prev, result]);
+    updateAnalysisQueueStatus(recording.id, 'completed');
+    setCurrentRecording(recording);
     setIsAnalyzingCurrent(false);
-    setCurrentRecording(null);
-  }, [addAnalysisResult]);
+    setRecordingError(null);
+  }, [addAnalysisResult, updateAnalysisQueueStatus]);
 
-  const {
-    queueAnalysis,
-    isProcessing,
-    completedCount,
-    errorCount,
-  } = useRealtimeAnalysis(debateData as any, debateTypeId, handleAnalysisComplete);
+  const { queueAnalysis, isProcessing } = useRealtimeAnalysis(debateData as any, debateTypeId, handleAnalysisComplete);
 
-  // Timer hook - no necesita parámetros
   useDebateTimer();
-  
-  // Auto recording hook - usa el hook simple sin parámetros
-  const { isRecording } = useAutoAudioRecording();
 
-  // Inicializar debate desde los datos al montar
+  const handleRecordingReady = useCallback(async (recording: AudioRecording) => {
+    setCurrentRecording(recording);
+    setRecordingError(null);
+    setIsAnalyzingCurrent(true);
+    updateAnalysisQueueStatus(recording.id, 'analyzing');
+
+    try {
+      await queueAnalysis(recording);
+    } catch (error) {
+      updateAnalysisQueueStatus(recording.id, 'error');
+      setIsAnalyzingCurrent(false);
+      setRecordingError(error instanceof Error ? error.message : 'No se pudo analizar la intervención');
+    }
+  }, [queueAnalysis, updateAnalysisQueueStatus]);
+
+  const { isRecording, audioError } = useAutoAudioRecording({
+    onRecordingComplete: handleRecordingReady,
+  });
+
   useEffect(() => {
     if (debateData) {
       if (debate) {
-        // Nuevo formato: inicializar desde Debate
         const isRetor = debate.debate_type === 'retor';
-        const roundDurations = isRetor
-          ? {
-              introduccion: 360,
-              primerRefutador: 120,
-              segundoRefutador: 300,
-              conclusion: 180,
-            }
-          : {
-              introduccion: 180,
-              primerRefutador: 240,
-              segundoRefutador: 240,
-              conclusion: 180,
-            };
-        
         initializeDebate({
           teamAName: debate.team_a_name,
           teamBName: debate.team_b_name,
           debateTopic: debate.debate_topic,
-          roundDurations,
-        });
+          roundDurations: isRetor
+            ? { introduccion: 360, primerRefutador: 120, segundoRefutador: 300, conclusion: 180 }
+            : { introduccion: 180, primerRefutador: 240, segundoRefutador: 240, conclusion: 180 },
+        }, debate.code);
       } else if (project) {
-        // Legacy: inicializar desde Project
-        initializeDebateFromProject(project);
+        initializeDebateFromProject(project, project.code);
       }
     }
   }, [debateData, debate, project, initializeDebate, initializeDebateFromProject]);
 
-  // Extraer valores del debate/proyecto
+  useEffect(() => {
+    if (state === 'finished') {
+      onFinish?.();
+    }
+  }, [state, onFinish]);
+
+  useEffect(() => {
+    if (audioError) {
+      setRecordingError(audioError);
+    }
+  }, [audioError]);
+
+  if (!debateData) {
+    return (
+      <div className="app-shell flex items-center justify-center">
+        <div className="text-white/60">Error: No se proporcionó debate ni proyecto</div>
+      </div>
+    );
+  }
+
   const teamAName = debate?.team_a_name || project?.team_a_name || getTeamName('A');
   const teamBName = debate?.team_b_name || project?.team_b_name || getTeamName('B');
-  const debateTopic = debate?.debate_topic || debate?.name || project?.debate_topic || project?.name || 'Tema del Debate';
-  const debateTypeLabel = debateTypeId === 'retor' ? 'RETOR' : 'UPCT';
+  const debateTopic = debate?.debate_topic || debate?.name || project?.debate_topic || project?.name || 'Tema del debate';
   const isTeamAActive = currentTeam === 'A';
-
   const totalRounds = 8;
+  const currentRound = getCurrentRound();
+
+  const sideStats = useMemo(() => {
+    const buildStats = (posture: 'A Favor' | 'En Contra', teamName: string, accent: string) => {
+      const results = analysisResults.filter((result) => normalizePosture(result.postura) === posture);
+      const totalPoints = results.reduce((sum, result) => sum + result.total, 0);
+      const totalMax = results.reduce((sum, result) => sum + result.max_total, 0);
+      const averagePercent = results.length
+        ? results.reduce((sum, result) => sum + (result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100), 0) / results.length
+        : 0;
+      const strongestPhase = results.reduce<{ fase: string; score: number } | null>((best, result) => {
+        const score = result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100;
+        return !best || score > best.score ? { fase: result.fase, score } : best;
+      }, null);
+
+      return {
+        posture: posture === 'A Favor' ? 'A favor' : 'En contra',
+        teamName,
+        accent,
+        totalPoints,
+        totalMax,
+        averagePercent,
+        strongestPhase: strongestPhase?.fase || 'Sin datos',
+        interventions: results.length,
+      };
+    };
+
+    return [
+      buildStats('A Favor', teamAName, '#FF6B00'),
+      buildStats('En Contra', teamBName, '#00E5FF'),
+    ];
+  }, [analysisResults, teamAName, teamBName]);
+
+  const generalStats = [
+    { label: 'Intervenciones analizadas', value: analysisResults.length },
+    { label: 'Audio acumulado', value: formatDuration(recordings.reduce((sum, item) => sum + item.duration, 0)) },
+    { label: 'Ronda actual', value: `${currentRoundIndex + 1}/${totalRounds}` },
+    { label: 'Estado', value: state === 'running' ? 'En directo' : state === 'paused' ? 'Pausado' : state === 'finished' ? 'Finalizado' : 'Preparado' },
+  ];
 
   const handlePlayPause = () => {
     if (state === 'paused') {
@@ -131,295 +190,240 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({ project, d
     }
   };
 
-  const handleNext = () => {
-    goToNextTeamBTurn();
-  };
-
-  const handlePrevious = () => {
-    goToNextTeamATurn();
-  };
-
-  const handleEndDebate = () => {
-    finishDebate();
-    onFinish?.();
-  };
-
-  const handleAnalyzeCurrent = async () => {
-    if (currentRecording) {
-      setIsAnalyzingCurrent(true);
-      await queueAnalysis(currentRecording);
-    }
-  };
-
-  const handleDiscardCurrent = () => {
-    setCurrentRecording(null);
-  };
-
-  useEffect(() => {
-    if (state === 'finished') {
-      onFinish?.();
-    }
-  }, [state, onFinish]);
-
-  // Early return después de todos los hooks
-  if (!debateData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white/60">Error: No se proporcionó debate ni proyecto</div>
-      </div>
-    );
-  }
-
-  const currentRound = getCurrentRound();
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
-      {/* Header con info del proyecto */}
-      <header className="backdrop-blur-xl bg-black/40 border-b border-white/10 p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <div className="app-shell flex min-h-screen flex-col overflow-hidden">
+      <header className="border-b border-white/10 bg-slate-950/50 px-4 py-4 backdrop-blur-xl sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {onBack && (
               <button
                 onClick={onBack}
-                className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                className="rounded-xl border border-white/10 bg-white/5 p-2 transition-colors hover:bg-white/10"
               >
-                <ArrowLeft className="w-5 h-5 text-white/70" />
+                <ArrowLeft className="h-5 w-5 text-white/70" />
               </button>
             )}
+
             <div>
-              <h1 className="text-xl font-bold text-white">{debateTopic}</h1>
-              <p className="text-sm text-white/50">
-                {teamAName} vs {teamBName} · {debateTypeLabel}
-              </p>
+              <h1 className="text-xl font-semibold text-white sm:text-2xl">{debateTopic}</h1>
+              <p className="text-sm text-white/42">{teamAName} vs {teamBName}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Botón de resultados */}
+            {(isRecording || isProcessing) && (
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/68">
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin text-blue-400" /> : <Mic className="h-4 w-4 animate-pulse text-[#FF6B00]" />}
+                {isProcessing ? 'Analizando' : 'Grabando'}
+              </div>
+            )}
+
             <button
-              onClick={() => setShowResultsPanel(!showResultsPanel)}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors
-                ${showResultsPanel 
-                  ? 'bg-[#00E5FF]/20 border-[#00E5FF]/50 text-[#00E5FF]' 
-                  : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'}
-              `}
+              onClick={() => setShowDashboard((prev) => !prev)}
+              className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-white/74 transition-colors hover:bg-white/10"
             >
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline">Resultados</span>
-              {analysisResults.length > 0 && (
-                <span className="ml-1 px-2 py-0.5 bg-[#00E5FF]/30 rounded-full text-xs">
-                  {analysisResults.length}
-                </span>
-              )}
+              <Sparkles className="h-4 w-4" />
+              Dashboard
+              {showDashboard ? <ChevronDown className="h-4 w-4 rotate-180" /> : <ChevronDown className="h-4 w-4" />}
             </button>
-
-            {/* Indicadores de grabación y análisis */}
-            <div className="flex items-center gap-2">
-              {isRecording && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF6B00]/20 border border-[#FF6B00]/30">
-                  <Mic className="w-4 h-4 text-[#FF6B00] animate-pulse" />
-                  <span className="text-[#FF6B00] text-sm font-medium hidden sm:inline">Grabando</span>
-                </div>
-              )}
-              
-              {isProcessing && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/30">
-                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                  <span className="text-blue-400 text-sm font-medium hidden sm:inline">Analizando...</span>
-                </div>
-              )}
-
-              {completedCount > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/30">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400 text-sm">{completedCount}</span>
-                </div>
-              )}
-
-              {errorCount > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/30">
-                  <AlertCircle className="w-4 h-4 text-red-400" />
-                  <span className="text-red-400 text-sm">{errorCount}</span>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Panel de grabación actual */}
-          {currentRecording && (
-            <div className="p-4 bg-[#00E5FF]/10 border-b border-[#00E5FF]/30">
-              <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileAudio className="w-5 h-5 text-[#00E5FF]" />
+      <main className="mx-auto flex w-full max-w-7xl flex-1 items-center px-4 py-6 sm:px-6">
+        <div className="grid w-full gap-4 xl:grid-cols-[1fr_360px_1fr]">
+          <TeamCard
+            teamId="A"
+            teamName={teamAName}
+            isActive={isTeamAActive && state !== 'setup'}
+            timeRemaining={timeRemaining}
+            maxTime={currentRound?.duration || 180}
+          />
+
+          <CentralPanel
+            debateTopic={config.debateTopic}
+            currentRoundType={currentRound?.roundType}
+            activeTeam={state === 'setup' ? 'Preparación' : isTeamAActive ? teamAName : teamBName}
+            roundNumber={currentRoundIndex + 1}
+            totalRounds={totalRounds}
+            isRunning={isTimerRunning}
+            onPlayPause={handlePlayPause}
+            onPrevious={() => goToNextTeamATurn()}
+            onNext={() => goToNextTeamBTurn()}
+            onEndDebate={() => {
+              finishDebate();
+              onFinish?.();
+            }}
+            hasNextTeamATurn={canNavigateToTeamATurn()}
+            hasNextTeamBTurn={canNavigateToTeamBTurn()}
+            isLastRound={isLastRound()}
+            debateState={state}
+          />
+
+          <TeamCard
+            teamId="B"
+            teamName={teamBName}
+            isActive={!isTeamAActive && state !== 'setup'}
+            timeRemaining={timeRemaining}
+            maxTime={currentRound?.duration || 180}
+          />
+        </div>
+      </main>
+
+      {(recordingError || audioError) && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-30 w-[min(680px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-xl">
+          {recordingError || audioError}
+        </div>
+      )}
+
+      <div
+        className={`fixed inset-0 z-40 transition-all duration-300 ${showDashboard ? 'pointer-events-auto bg-black/62 backdrop-blur-md' : 'pointer-events-none bg-transparent'}`}
+        onClick={() => setShowDashboard(false)}
+      />
+
+      <aside
+        className={`fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-6xl rounded-t-[32px] border border-white/12 bg-slate-950 shadow-[0_-24px_80px_rgba(2,6,23,0.68)] transition-transform duration-300 ${
+          showDashboard ? 'translate-y-0' : 'translate-y-[86%]'
+        }`}
+      >
+        <div className="mx-auto max-h-[78vh] overflow-y-auto px-5 pb-6 pt-4 sm:px-6">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <button
+              onClick={() => setShowDashboard((prev) => !prev)}
+              className="mx-auto flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/72"
+            >
+              <span className="h-1.5 w-10 rounded-full bg-white/20" />
+              Dashboard
+              {showDashboard ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+
+            {showDashboard && (
+              <button
+                onClick={() => setShowDashboard(false)}
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {sideStats.map((side) => (
+              <div
+                key={side.posture}
+                className="rounded-[26px] border px-5 py-5"
+                style={{
+                  borderColor: `${side.accent}40`,
+                  background: `linear-gradient(180deg, ${side.accent}18 0%, rgba(10,15,28,0.98) 100%)`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-white font-medium">
-                      Intervención grabada - {currentRecording.roundType}
+                    <p className="text-xs uppercase tracking-[0.26em]" style={{ color: side.accent }}>
+                      {side.posture}
                     </p>
-                    <p className="text-white/50 text-sm">
-                      {currentRecording.team === 'A' ? teamAName : teamBName} · {Math.round(currentRecording.duration)}s
-                    </p>
+                    <h3 className="mt-3 text-2xl font-semibold text-white">{side.teamName}</h3>
+                  </div>
+                  <p className="text-4xl font-semibold text-white">{formatCompactScore(side.averagePercent)}%</p>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">Puntos</p>
+                    <p className="mt-2 text-lg font-semibold text-white">{side.totalPoints}/{side.totalMax}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">Fase</p>
+                    <p className="mt-2 text-lg font-semibold text-white">{side.strongestPhase}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">Análisis</p>
+                    <p className="mt-2 text-lg font-semibold text-white">{side.interventions}</p>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleDiscardCurrent}
-                    disabled={isAnalyzingCurrent}
-                    className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 transition-colors disabled:opacity-50"
-                  >
-                    Descartar
-                  </button>
-                  <button
-                    onClick={handleAnalyzeCurrent}
-                    disabled={isAnalyzingCurrent}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00E5FF]/20 border border-[#00E5FF]/50 text-[#00E5FF] hover:bg-[#00E5FF]/30 transition-colors disabled:opacity-50"
-                  >
-                    {isAnalyzingCurrent ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Analizando...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        Analizar Intervención
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {generalStats.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">{item.label}</p>
+                <p className="mt-2 text-lg font-semibold text-white">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-[26px] border border-white/12 bg-white/8 px-5 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.26em] text-white/38">Análisis</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">Detalle de intervenciones</h3>
+              </div>
+              {currentRecording && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/62">
+                  Última: {Math.round(currentRecording.duration)} s
+                </span>
+              )}
             </div>
-          )}
 
-          {/* Debate Area */}
-          <main className="flex-1 flex flex-col md:flex-row gap-2 p-2 sm:p-3 overflow-auto">
-            {/* Team A - Naranja */}
-            <TeamCard
-              teamId="A"
-              teamName={teamAName}
-              isActive={isTeamAActive && state !== 'setup'}
-              timeRemaining={timeRemaining}
-              maxTime={currentRound?.duration || 180}
-              roundType={currentRound?.roundType}
-              roundOrder={currentRound?.order}
-            />
-
-            {/* Central Panel */}
-            <CentralPanel
-              debateTopic={config.debateTopic}
-              currentRoundType={currentRound?.roundType}
-              activeTeam={
-                state === 'setup'
-                  ? 'Preparación'
-                  : isTeamAActive
-                    ? teamAName
-                    : teamBName
-              }
-              roundNumber={currentRoundIndex + 1}
-              totalRounds={totalRounds}
-              isRunning={isTimerRunning}
-              onPlayPause={handlePlayPause}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              onEndDebate={handleEndDebate}
-              hasNextTeamATurn={canNavigateToTeamATurn()}
-              hasNextTeamBTurn={canNavigateToTeamBTurn()}
-              isLastRound={isLastRound()}
-              debateState={state}
-            />
-
-            {/* Team B - Cian */}
-            <TeamCard
-              teamId="B"
-              teamName={teamBName}
-              isActive={!isTeamAActive && state !== 'setup'}
-              timeRemaining={timeRemaining}
-              maxTime={currentRound?.duration || 180}
-              roundType={currentRound?.roundType}
-              roundOrder={currentRound?.order}
-            />
-          </main>
-
-          {/* Footer */}
-          <footer className="backdrop-blur-xl bg-black/40 border-t border-white/10 p-3 sm:p-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-white/50 gap-2">
-                <div>
-                  Estado:{' '}
-                  <span className="text-white font-semibold">
-                    {state === 'setup'
-                      ? 'CONFIGURACIÓN'
-                      : state === 'running'
-                        ? '► EN DIRECTO'
-                        : state === 'paused'
-                          ? '⏸ PAUSADO'
-                          : '✓ FINALIZADO'}
-                  </span>
-                </div>
-                <div>Ronda {currentRoundIndex + 1} de {totalRounds}</div>
-              </div>
-            </div>
-          </footer>
-        </div>
-
-        {/* Results Panel */}
-        {showResultsPanel && (
-          <div className="w-96 bg-black/60 backdrop-blur-xl border-l border-white/10 overflow-y-auto">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-white">Resultados</h2>
-                <button
-                  onClick={() => setShowResultsPanel(false)}
-                  className="p-1 text-white/50 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
+            <div className="mt-4 space-y-3">
               {analysisResults.length === 0 ? (
-                <div className="text-center py-8 text-white/40">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>No hay análisis aún</p>
-                  <p className="text-sm mt-1">Graba y analiza intervenciones para ver los resultados</p>
+                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/25 px-4 py-6 text-center text-sm text-white/45">
+                  El dashboard se llenará cuando lleguen las primeras puntuaciones.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {analysisResults.map((result, index) => (
-                    <div
-                      key={index}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-white font-medium text-sm">{result.fase}</span>
-                        <span className="text-[#00E5FF] font-bold">{result.total}/{result.max_total}</span>
-                      </div>
-                      <p className="text-white/50 text-xs mb-2">{result.postura}</p>
-                      
-                      <div className="space-y-1">
-                        {result.criterios.slice(0, 3).map((criterio, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs">
-                            <span className="text-white/60">{criterio.criterio}</span>
-                            <span className="text-white/80">{criterio.nota}</span>
+                analysisResults.map((result, index) => {
+                  const isExpanded = expandedAnalysisIndex === index;
+                  const accent = normalizePosture(result.postura) === 'A Favor' ? '#FF6B00' : '#00E5FF';
+                  return (
+                    <div key={`${result.fase}-${index}`} className="overflow-hidden rounded-2xl border border-white/12 bg-slate-950/72">
+                      <button
+                        onClick={() => setExpandedAnalysisIndex(isExpanded ? null : index)}
+                        className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="h-3 w-3 rounded-full" style={{ background: accent, boxShadow: `0 0 16px ${accent}66` }} />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-white">{result.fase}</p>
+                            <p className="mt-1 text-xs text-white/45">{result.postura} · {result.orador}</p>
                           </div>
-                        ))}
-                        {result.criterios.length > 3 && (
-                          <p className="text-xs text-white/40 mt-1">+{result.criterios.length - 3} criterios más...</p>
-                        )}
-                      </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-white">{result.total}/{result.max_total}</p>
+                            <p className="text-xs text-white/45">{formatCompactScore(result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100)}%</p>
+                          </div>
+                          {isExpanded ? <ChevronUp className="h-4 w-4 text-white/50" /> : <ChevronDown className="h-4 w-4 text-white/50" />}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-white/10 px-4 py-4">
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {result.criterios.map((criterio) => (
+                              <div key={criterio.criterio} className="rounded-2xl border border-white/12 bg-white/8 px-4 py-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p className="text-sm font-medium text-white/85">{criterio.criterio}</p>
+                                  <span className="text-sm font-semibold text-white">{criterio.nota}</span>
+                                </div>
+                                {criterio.anotacion && (
+                                  <p className="mt-2 text-xs leading-5 text-white/50">{criterio.anotacion}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      </aside>
     </div>
   );
 };

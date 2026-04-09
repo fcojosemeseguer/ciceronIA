@@ -40,6 +40,7 @@ from app.core.database import (
     create_project_segment,
     create_project_share_link,
     create_user,
+    delete_project_for_user,
     get_project,
     get_project_by_code,
     get_project_debate_type,
@@ -75,7 +76,7 @@ AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
 AUTH_RATE_LIMIT_MAX_REQUESTS = 10
 _auth_rate_limit: dict[str, list[float]] = {}
 
-MAX_AUDIO_FILE_SIZE_MB = 25
+MAX_AUDIO_FILE_SIZE_MB = 100
 MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024
 
 UPLOAD_DIR = Path("uploads/audios")
@@ -942,6 +943,22 @@ async def getproject(data: AuthDataProject, request: Request, response: Response
         response_payload["dashboard"] = dashboard
 
     return response_payload
+
+
+@router.post("/delete-project")
+async def delete_project(data: AuthDataProject, request: Request, response: Response):
+    payload = _resolve_auth_payload(request, response, data.jwt)
+    _resolve_project_ownership_or_fail(payload["user_code"], data.project_code)
+
+    deleted = delete_project_for_user(payload["user_code"], data.project_code)
+    if not deleted:
+      raise HTTPException(status_code=500, detail="failed to delete project")
+
+    chats.pop(data.project_code, None)
+    return {
+        "message": "project deleted",
+        "project_code": data.project_code,
+    }
 
 
 @router.post("/projects/{project_code}/share-links")

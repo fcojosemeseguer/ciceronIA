@@ -39,10 +39,17 @@ interface CreateDebateResponse {
   project_code?: string;
   debate_code?: string;
   debate_type: string;
+  name?: string;
+  description?: string;
   team_a_name?: string;
   team_b_name?: string;
   debate_topic?: string;
   mode?: string;
+  status?: string;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  user_code?: string;
 }
 
 // Helper para normalizar backend response a tipo Debate
@@ -51,8 +58,8 @@ const normalizeDebate = (backendDebate: BackendDebate): Debate => ({
   code: backendDebate.code || backendDebate.project_code || '',
   description: backendDebate.description || backendDebate.desc || '',
   debate_topic: backendDebate.debate_topic || backendDebate.name || '',
-  team_a_name: backendDebate.team_a_name || 'Equipo A',
-  team_b_name: backendDebate.team_b_name || 'Equipo B',
+  team_a_name: backendDebate.team_a_name || 'A favor',
+  team_b_name: backendDebate.team_b_name || 'En contra',
   mode: (backendDebate.mode as DebateMode) || 'analysis',
   status: (backendDebate.status as DebateStatus) || 'draft',
 });
@@ -114,14 +121,7 @@ export const debatesService = {
   /**
    * Crear un nuevo debate
    */
-  async createDebate(data: CreateDebateData): Promise<{ 
-    debate_code: string; 
-    debate_type: string; 
-    team_a_name?: string; 
-    team_b_name?: string; 
-    debate_topic?: string;
-    mode: DebateMode;
-  }> {
+  async createDebate(data: CreateDebateData): Promise<Debate> {
     const response = await apiClient.post<CreateDebateResponse>('/new-project', {
       name: data.name,
       description: data.description,
@@ -131,14 +131,21 @@ export const debatesService = {
       debate_topic: data.debate_topic,
       mode: data.mode,
     });
-    return {
-      debate_code: response.data.debate_code || response.data.project_code || '',
-      debate_type: response.data.debate_type,
-      team_a_name: response.data.team_a_name,
-      team_b_name: response.data.team_b_name,
-      debate_topic: response.data.debate_topic,
-      mode: (response.data.mode as DebateMode) || data.mode,
-    };
+    return normalizeDebate({
+      code: response.data.debate_code || response.data.project_code || '',
+      name: response.data.name || data.debate_topic,
+      description: response.data.description || data.description,
+      debate_type: response.data.debate_type || data.debate_type,
+      team_a_name: response.data.team_a_name || data.team_a_name,
+      team_b_name: response.data.team_b_name || data.team_b_name,
+      debate_topic: response.data.debate_topic || data.debate_topic,
+      mode: response.data.mode || data.mode,
+      status: response.data.status || 'draft',
+      created_at: response.data.created_at || new Date().toISOString(),
+      started_at: response.data.started_at,
+      completed_at: response.data.completed_at,
+      user_code: response.data.user_code || '',
+    });
   },
 
   /**

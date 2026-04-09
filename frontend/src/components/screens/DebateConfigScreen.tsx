@@ -1,18 +1,9 @@
 /**
- * DebateConfigScreen - Pantalla de configuración unificada para nuevos debates
- * 
- * Esta pantalla reemplaza el modal de creación de proyectos.
- * Se muestra cuando el usuario quiere iniciar un nuevo debate (análisis o en vivo).
- * 
- * Props:
- * - mode: 'live' | 'analysis' - Determina el modo del debate
- * - onBack: () => void - Volver atrás
- * - onStartLive: (debate: Debate) => void - Iniciar debate en vivo
- * - onStartAnalysis: (debate: Debate) => void - Iniciar análisis de audio
+ * DebateConfigScreen - Configuracion unificada para debates en vivo y analisis.
  */
 
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Mic, FileAudio, Loader2, Info } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Mic, FileAudio, Loader2, LayoutTemplate, Shield, MessageSquare } from 'lucide-react';
 import { useUnifiedDebateStore } from '../../store';
 import { CreateDebateData, DebateMode, Debate } from '../../types';
 import { LiquidGlassButton } from '../common';
@@ -43,12 +34,11 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
     name: '',
     description: '',
     debate_type: 'upct',
-    team_a_name: 'Equipo A',
-    team_b_name: 'Equipo B',
+    team_a_name: 'A favor',
+    team_b_name: 'En contra',
     debate_topic: '',
-    mode: mode,
+    mode,
   });
-  
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,20 +46,66 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
     fetchDebateTypes();
   }, [fetchDebateTypes]);
 
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, mode }));
+  }, [mode]);
+
+  const scrollToTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const surfaceClasses = 'rounded-[28px] border border-white/10 bg-white/[0.04] shadow-[0_24px_60px_rgba(2,6,23,0.32)]';
+  const pageTitle = mode === 'live' ? 'Configurar Debate en Vivo' : 'Configurar Análisis de Grabación';
+  const pageDescription = mode === 'live'
+    ? 'Misma estructura, mismos campos y listo para empezar en directo.'
+    : 'Misma estructura, mismos campos y listo para subir los audios del debate.';
+  const submitLabel = mode === 'live' ? 'Iniciar debate' : 'Continuar al análisis';
+  const modeLabel = mode === 'live' ? 'Debate en vivo' : 'Analizar grabación';
+  const modeIcon = mode === 'live'
+    ? <Mic className="h-5 w-5 text-white/80" />
+    : <FileAudio className="h-5 w-5 text-white/80" />;
+
+  const activeError = formError || error;
+
+  const selectedDebateTypeDescription = useMemo(() => {
+    return debateTypes.find((debateType) => debateType.id === formData.debate_type)?.descripcion || '';
+  }, [debateTypes, formData.debate_type]);
+
+  const handleFieldChange = (field: keyof CreateDebateData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (formError) {
+      setFormError('');
+    }
+    if (error) {
+      clearError();
+    }
+  };
+
+  const failWith = (message: string) => {
+    setFormError(message);
+    scrollToTop();
+  };
+
   const handleSubmit = async () => {
-    // Validaciones
     if (!formData.name.trim()) {
-      setFormError('El nombre del debate es obligatorio');
+      failWith('Debes ingresar un nombre para el debate');
       return;
     }
 
     if (!formData.debate_topic.trim()) {
-      setFormError('El tema del debate es obligatorio');
+      failWith('Debes ingresar un tema para el debate');
       return;
     }
 
-    if (!formData.team_a_name.trim() || !formData.team_b_name.trim()) {
-      setFormError('Los nombres de ambos equipos son obligatorios');
+    if (!formData.team_a_name.trim()) {
+      failWith('Debes ingresar el nombre de la postura a favor');
+      return;
+    }
+
+    if (!formData.team_b_name.trim()) {
+      failWith('Debes ingresar el nombre de la postura en contra');
       return;
     }
 
@@ -77,154 +113,155 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
     setFormError('');
 
     try {
-      const debateCode = await createDebate(formData);
-      
-      // Obtener el debate recién creado del store
-      const newDebate = useUnifiedDebateStore.getState().debates.find(
-        d => d.code === debateCode
-      );
-      
-      if (newDebate) {
-        if (mode === 'live') {
-          onStartLive(newDebate);
-        } else {
-          onStartAnalysis(newDebate);
-        }
+      const payload: CreateDebateData = {
+        ...formData,
+        name: formData.name.trim(),
+      };
+      const newDebate = await createDebate(payload);
+
+      if (mode === 'live') {
+        onStartLive(newDebate);
       } else {
-        setFormError('Error al crear el debate. Inténtalo de nuevo.');
+        onStartAnalysis(newDebate);
       }
-    } catch (err) {
-      setFormError('Error al crear el debate');
+    } catch (submissionError) {
+      console.error('Error al crear el debate:', submissionError);
+      failWith('Error al crear el debate');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isLiveMode = mode === 'live';
-  const pageTitle = isLiveMode ? 'Nuevo Debate en Vivo' : 'Analizar Grabación';
-  const pageDescription = isLiveMode 
-    ? 'Configura los equipos y el tema para comenzar el debate' 
-    : 'Configura el debate para analizar la grabación de audio';
-  const submitButtonText = isLiveMode ? 'Iniciar Debate' : 'Continuar al Análisis';
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
-      <div className="p-4 sm:p-6 lg:p-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
+    <div className="app-shell overflow-y-auto">
+      <div className="px-4 py-6 pb-36 sm:px-6 sm:pb-40 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-8 flex items-center gap-4">
             <button
               onClick={onBack}
-              className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              className="rounded-2xl border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/10"
             >
-              <ArrowLeft className="w-6 h-6 text-white/70" />
+              <ArrowLeft className="h-6 w-6 text-white/70" />
             </button>
+
             <div>
-              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                {isLiveMode ? (
-                  <Mic className="w-8 h-8 text-[#00E5FF]" />
-                ) : (
-                  <FileAudio className="w-8 h-8 text-[#00E5FF]" />
-                )}
-                {pageTitle}
-              </h1>
-              <p className="text-white/50 mt-1">{pageDescription}</p>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-white/55">
+                {modeIcon}
+                {modeLabel}
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">{pageTitle}</h1>
+              <p className="mt-2 text-white/50">{pageDescription}</p>
             </div>
           </div>
 
-          {/* Error global */}
-          {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
-              {error}
+          {activeError && (
+            <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
+              {activeError}
             </div>
           )}
 
-          {/* Formulario */}
-          <div className="backdrop-blur-2xl bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8">
-            <div className="space-y-6">
-              {/* Nombre del debate */}
-              <div>
-                <label className="block text-sm text-white/70 mb-2">
-                  Nombre del debate <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => {
-                    setFormData({ ...formData, name: e.target.value });
-                    setFormError('');
-                  }}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                  placeholder="Ej: Torneo UPCT 2024 - Semifinal"
-                />
-              </div>
-
-              {/* Tema del debate */}
-              <div>
-                <label className="block text-sm text-white/70 mb-2">
-                  Tema del debate <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.debate_topic}
-                  onChange={(e) => {
-                    setFormData({ ...formData, debate_topic: e.target.value });
-                    setFormError('');
-                  }}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                  placeholder="Ej: ¿Debería implementarse la jornada laboral de 4 días?"
-                />
-              </div>
-
-              {/* Equipos */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <section className={`${surfaceClasses} p-6 sm:p-8`}>
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <MessageSquare className="h-5 w-5 text-white/75" />
+                </div>
                 <div>
-                  <label className="block text-sm text-[#FF6B00] mb-2">
-                    Equipo A (A favor) <span className="text-red-400">*</span>
+                  <h2 className="text-xl font-semibold text-white">Datos del debate</h2>
+                  <p className="text-sm text-white/45">La misma estructura en ambos modos.</p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm text-white/70">
+                    Nombre del debate <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.team_a_name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, team_a_name: e.target.value });
-                      setFormError('');
-                    }}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF6B00]/50 transition-colors"
-                    placeholder="Nombre del equipo A"
+                    value={formData.name}
+                    onChange={(e) => handleFieldChange('name', e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/25 outline-none transition-colors focus:border-white/30"
+                    placeholder="Ej: Semifinal UPCT 2026"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm text-[#00E5FF] mb-2">
-                    Equipo B (En contra) <span className="text-red-400">*</span>
+                  <label className="mb-2 block text-sm text-white/70">
+                    Tema del debate <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.team_b_name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, team_b_name: e.target.value });
-                      setFormError('');
-                    }}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                    placeholder="Nombre del equipo B"
+                    value={formData.debate_topic}
+                    onChange={(e) => handleFieldChange('debate_topic', e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/25 outline-none transition-colors focus:border-white/30"
+                    placeholder="Ej: ¿Debería implementarse la jornada laboral de 4 días?"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/70">
+                      A favor <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.team_a_name}
+                      onChange={(e) => handleFieldChange('team_a_name', e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/25 outline-none transition-colors focus:border-white/30"
+                      placeholder="Nombre de la postura a favor"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/70">
+                      En contra <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.team_b_name}
+                      onChange={(e) => handleFieldChange('team_b_name', e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/25 outline-none transition-colors focus:border-white/30"
+                      placeholder="Nombre de la postura en contra"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/70">Descripción (opcional)</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleFieldChange('description', e.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/25 outline-none transition-colors focus:border-white/30"
+                    placeholder="Notas adicionales sobre el debate, participantes o contexto."
                   />
                 </div>
               </div>
+            </section>
 
-              {/* Tipo de debate */}
-              <div>
-                <label className="block text-sm text-white/70 mb-2">
-                  Formato de debate
-                </label>
+            <section className={`${surfaceClasses} p-6 sm:p-8`}>
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <LayoutTemplate className="h-5 w-5 text-white/75" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Formato</h2>
+                  <p className="text-sm text-white/45">Misma presentación para vivo y grabación.</p>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <label className="mb-2 block text-sm text-white/70">Tipo de debate</label>
                 <select
                   value={formData.debate_type}
-                  onChange={(e) => setFormData({ ...formData, debate_type: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#00E5FF]/50 transition-colors appearance-none cursor-pointer"
+                  onChange={(e) => handleFieldChange('debate_type', e.target.value)}
+                  className="w-full cursor-pointer appearance-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors focus:border-white/30"
                   style={{ backgroundImage: 'none' }}
                 >
-                  {debateTypes.map((dt) => (
-                    <option key={dt.id} value={dt.id} className="bg-slate-900">
-                      {dt.nombre}
+                  {debateTypes.map((debateType) => (
+                    <option key={debateType.id} value={debateType.id} className="bg-slate-900">
+                      {debateType.nombre}
                     </option>
                   ))}
                   {debateTypes.length === 0 && (
@@ -234,84 +271,48 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     </>
                   )}
                 </select>
-                {debateTypes.length > 0 && (
-                  <p className="mt-2 text-sm text-white/40">
-                    {debateTypes.find(dt => dt.id === formData.debate_type)?.descripcion}
-                  </p>
-                )}
               </div>
 
-              {/* Descripción opcional */}
-              <div>
-                <label className="block text-sm text-white/70 mb-2">
-                  Descripción (opcional)
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors resize-none"
-                  rows={3}
-                  placeholder="Notas adicionales sobre el debate, participantes, ubicación, etc."
-                />
-              </div>
-
-              {/* Info box según modo */}
-              <div className="p-4 rounded-xl bg-[#00E5FF]/10 border border-[#00E5FF]/20">
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
                 <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-[#00E5FF] flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-white/70">
-                    {isLiveMode ? (
-                      <>
-                        <strong className="text-white">Debate en Vivo:</strong> Se iniciará un temporizador 
-                        con las rondas configuradas. Las intervenciones se grabarán automáticamente y se 
-                        podrán analizar en tiempo real. El debate se guardará en tu historial al finalizar.
-                      </>
-                    ) : (
-                      <>
-                        <strong className="text-white">Análisis de Grabación:</strong> Podrás subir 
-                        archivos de audio para cada fase del debate. El sistema analizará automáticamente 
-                        cada intervención y generará un informe completo con puntuaciones y feedback.
-                      </>
-                    )}
+                  <Shield className="mt-0.5 h-5 w-5 text-white/65" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Información del formato</p>
+                    <p className="mt-2 text-sm leading-6 text-white/55">
+                      {selectedDebateTypeDescription || 'Selecciona un formato para ver su descripción.'}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Error de formulario */}
-              {formError && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                  {formError}
-                </div>
+            </section>
+          </div>
+
+          <div className="mx-auto mt-8 flex max-w-xl flex-col gap-4 sm:flex-row">
+            <LiquidGlassButton
+              onClick={onBack}
+              variant="secondary"
+              className="flex-1"
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </LiquidGlassButton>
+
+            <LiquidGlassButton
+              onClick={handleSubmit}
+              variant="success"
+              className="flex-1 bg-gradient-to-br from-emerald-500/80 to-emerald-700/60 hover:from-emerald-500/90 hover:to-emerald-700/70 border-emerald-300/30 shadow-[0_10px_34px_rgba(16,185,129,0.28)] hover:shadow-[0_14px_40px_rgba(16,185,129,0.38)]"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Iniciando...
+                </span>
+              ) : (
+                submitLabel
               )}
-
-              {/* Botones */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <LiquidGlassButton
-                  onClick={onBack}
-                  variant="secondary"
-                  className="flex-1"
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </LiquidGlassButton>
-
-                <LiquidGlassButton
-                  onClick={handleSubmit}
-                  variant="primary"
-                  className="flex-1"
-                  disabled={isSubmitting || isLoading}
-                >
-                  {isSubmitting || isLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Creando...
-                    </span>
-                  ) : (
-                    submitButtonText
-                  )}
-                </LiquidGlassButton>
-              </div>
-            </div>
+            </LiquidGlassButton>
           </div>
         </div>
       </div>

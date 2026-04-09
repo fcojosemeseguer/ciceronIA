@@ -19,6 +19,7 @@ interface AnalysisState {
 interface AnalysisStore extends AnalysisState {
   // Actions
   addUpload: (upload: AudioUpload) => void;
+  replaceUploads: (uploads: AudioUpload[]) => void;
   removeUpload: (id: string) => void;
   updateUploadStatus: (id: string, status: AudioUpload['status'], updates?: Partial<AudioUpload>) => void;
   analyseAudio: (uploadId: string, project: Project, debateType: DebateType | null) => Promise<void>;
@@ -46,6 +47,17 @@ export const useAnalysisStore = create<AnalysisStore>()(
       set(state => ({
         uploads: [...state.uploads, upload],
       }));
+    },
+
+    replaceUploads: (uploads: AudioUpload[]) => {
+      const completed = uploads.filter(u => u.status === 'completed').length;
+      const total = uploads.length;
+      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      set({
+        uploads,
+        globalProgress: progress,
+      });
     },
 
     removeUpload: (id: string) => {

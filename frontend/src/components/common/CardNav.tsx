@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
-import { LogIn, ArrowUpRight } from 'lucide-react';
+import { LogIn, ArrowUpRight, LogOut, ChevronDown, Settings } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 type CardNavLink = {
@@ -28,6 +28,7 @@ export interface CardNavProps {
   buttonTextColor?: string;
   onLogin?: (redirectTo?: 'home') => void;
   onNavigate?: (page: string) => void;
+  onSettingsClick?: () => void;
 }
 
 const CardNav: React.FC<CardNavProps> = ({
@@ -41,7 +42,8 @@ const CardNav: React.FC<CardNavProps> = ({
   buttonBgColor = '#111',
   buttonTextColor = '#fff',
   onLogin,
-  onNavigate
+  onNavigate,
+  onSettingsClick,
 }) => {
   const { user, logout } = useAuthStore();
   const [isHamburgerOpen, setIsHamburgerOpen] = useState(false);
@@ -83,6 +85,7 @@ const CardNav: React.FC<CardNavProps> = ({
         return topBar + contentHeight + padding;
       }
     }
+
     return 260;
   };
 
@@ -90,17 +93,15 @@ const CardNav: React.FC<CardNavProps> = ({
     const navEl = navRef.current;
     if (!navEl) return null;
 
-    gsap.set(navEl, { height: 60, overflow: 'hidden' });
+    gsap.set(navEl, { height: 60, overflow: 'visible' });
     gsap.set(cardsRef.current, { y: 50, opacity: 0 });
 
     const tl = gsap.timeline({ paused: true });
-
     tl.to(navEl, {
       height: calculateHeight,
       duration: 0.4,
-      ease
+      ease,
     });
-
     tl.to(cardsRef.current, { y: 0, opacity: 1, duration: 0.4, ease, stagger: 0.08 }, '-=0.1');
 
     return tl;
@@ -114,7 +115,6 @@ const CardNav: React.FC<CardNavProps> = ({
       tl?.kill();
       tlRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ease, items]);
 
   useLayoutEffect(() => {
@@ -142,20 +142,12 @@ const CardNav: React.FC<CardNavProps> = ({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpanded]);
 
   const toggleMenu = () => {
     const tl = tlRef.current;
-    if (!tl) {
-      // Recrear el timeline si no existe
-      const newTl = createTimeline();
-      if (newTl) {
-        tlRef.current = newTl;
-      }
-      return;
-    }
-    
+    if (!tl) return;
+
     if (!isExpanded) {
       setIsHamburgerOpen(true);
       setIsExpanded(true);
@@ -163,9 +155,7 @@ const CardNav: React.FC<CardNavProps> = ({
     } else {
       setIsHamburgerOpen(false);
       tl.reverse();
-      setTimeout(() => {
-        setIsExpanded(false);
-      }, 400);
+      setTimeout(() => setIsExpanded(false), 400);
     }
   };
 
@@ -178,32 +168,35 @@ const CardNav: React.FC<CardNavProps> = ({
       const pageMap: { [key: string]: string } = {
         'Cómo funciona': 'how-it-works',
         'Equipo': 'team',
-        'Inicio': 'home'
+        'Inicio': 'home',
       };
       const page = pageMap[itemLabel] || itemLabel.toLowerCase().replace(/\s+/g, '-');
       onNavigate(page);
     }
-    // Cerrar el menú después de navegar
     if (isExpanded) {
       toggleMenu();
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    setShowUserDropdown(false);
+    gsap.set(navRef.current, { overflow: 'visible' });
+  };
+
   return (
-    <div
-      className={`card-nav-container fixed left-1/2 -translate-x-1/2 w-[90%] max-w-[800px] z-[99] top-[0.8em] md:top-[1.2em] ${className}`}
-    >
+    <div className={`card-nav-container fixed left-1/2 -translate-x-1/2 w-[92%] max-w-[820px] z-[99] top-[0.8em] md:top-[1.2em] ${className}`}>
       <nav
         ref={navRef}
-        className={`card-nav ${isExpanded ? 'open' : ''} block h-[60px] p-0 rounded-xl shadow-lg relative overflow-hidden will-change-[height] backdrop-blur-xl bg-white/10 border border-white/20`}
+        className="block h-[60px] rounded-xl shadow-[0_18px_48px_rgba(2,6,23,0.38)] relative overflow-visible will-change-[height] backdrop-blur-xl bg-slate-950/60 border border-white/10"
         style={{ backgroundColor: baseColor }}
       >
-        <div className="card-nav-top absolute inset-x-0 top-0 h-[60px] flex items-center justify-between p-2 pl-[1.1rem] z-[2]">
+        <div className="card-nav-top absolute inset-x-0 top-0 h-[60px] flex items-center justify-between gap-3 p-2 pl-4 pr-3 z-[2]">
           <div
-            className={`hamburger-menu ${isHamburgerOpen ? 'open' : ''} group h-full flex flex-col items-center justify-center cursor-pointer gap-[6px] order-2 md:order-none`}
+            className={`hamburger-menu ${isHamburgerOpen ? 'open' : ''} group h-full flex flex-col items-center justify-center cursor-pointer gap-[6px] shrink-0`}
             onClick={toggleMenu}
             role="button"
-            aria-label={isExpanded ? 'Cerrar menú' : 'Abrir menú'}
+            aria-label={isExpanded ? 'Cerrar menu' : 'Abrir menu'}
             tabIndex={0}
             style={{ color: menuColor || '#fff' }}
           >
@@ -219,69 +212,74 @@ const CardNav: React.FC<CardNavProps> = ({
             />
           </div>
 
-          <div className="logo-container flex items-center gap-3 md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 order-1 md:order-none">
-            <div className="w-8 h-8 flex items-center justify-center">
-              <img 
-                src="/logo.svg" 
-                alt={logoAlt} 
-                className="w-full h-full object-contain"
-              />
+          <div className="logo-container flex items-center gap-3 min-w-0 md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2">
+            <div className="w-8 h-8 flex items-center justify-center shrink-0">
+              <img src="/logo.svg" alt={logoAlt} className="w-full h-full object-contain" />
             </div>
             <span className="text-lg font-bold text-white tracking-tight hidden sm:block">
-              CiceronAI
+              CiceronIA
             </span>
           </div>
 
-          {user ? (
-            <div className="relative hidden md:block">
-              <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-300"
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-orange-500 flex items-center justify-center text-white font-semibold text-xs">
-                  {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-white/90 text-sm font-medium max-w-[100px] truncate">
-                  {user.name || user.email}
-                </span>
-              </button>
-
-              {showUserDropdown && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowUserDropdown(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-48 backdrop-blur-2xl bg-black/60 border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden z-50">
-                    <div className="p-3 border-b border-white/10">
-                      <p className="text-white font-medium text-sm truncate">{user.name}</p>
-                      <p className="text-white/50 text-xs truncate">{user.email}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        logout();
-                        setShowUserDropdown(false);
-                      }}
-                      className="w-full px-4 py-2.5 flex items-center gap-2 text-[#FF6B00] hover:bg-[#FF6B00]/10 transition-colors text-sm"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      <span>Cerrar sesión</span>
-                    </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserDropdown((prev) => !prev)}
+                  className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/15 transition-all duration-300"
+                >
+                  <div className="w-7 h-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-white font-semibold text-xs">
+                    {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
                   </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onLogin?.()}
-              className="card-nav-cta-button hidden md:inline-flex border-0 rounded-lg px-4 items-center gap-2 h-[40px] font-medium cursor-pointer transition-all duration-300 hover:opacity-90"
-              style={{ backgroundColor: buttonBgColor, color: buttonTextColor }}
-            >
-              <LogIn className="w-4 h-4" />
-              Iniciar sesión
-            </button>
-          )}
+                  <span className="hidden sm:block text-white/90 text-sm font-medium max-w-[110px] truncate">
+                    {user.name || user.email}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-white/60 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showUserDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-56 backdrop-blur-xl bg-slate-950/92 border border-white/10 rounded-xl shadow-[0_18px_48px_rgba(2,6,23,0.42)] overflow-hidden z-50">
+                      <div className="p-3 border-b border-white/10">
+                        <p className="text-white font-medium text-sm truncate">{user.name}</p>
+                        <p className="text-white/50 text-xs truncate">{user.email}</p>
+                      </div>
+                      {onSettingsClick && (
+                        <button
+                          onClick={() => {
+                            onSettingsClick();
+                            setShowUserDropdown(false);
+                          }}
+                          className="w-full px-4 py-3 flex items-center gap-2 text-white/85 hover:bg-white/5 transition-colors text-sm"
+                        >
+                          <Settings className="w-4 h-4 text-white/70" />
+                          <span>Configuracion</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-3 flex items-center gap-2 text-red-300 hover:bg-red-500/10 transition-colors text-sm"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Cerrar sesion</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onLogin?.()}
+                className="hidden sm:inline-flex border-0 rounded-lg px-4 items-center gap-2 h-[40px] font-medium cursor-pointer transition-all duration-300 hover:opacity-90"
+                style={{ backgroundColor: buttonBgColor, color: buttonTextColor }}
+              >
+                <LogIn className="w-4 h-4" />
+                Iniciar sesion
+              </button>
+            )}
+          </div>
         </div>
 
         <div
@@ -315,11 +313,10 @@ const CardNav: React.FC<CardNavProps> = ({
                         const pageMap: { [key: string]: string } = {
                           'Inicio': 'home',
                           'Cómo funciona': 'how-it-works',
-                          'Equipo': 'team'
+                          'Equipo': 'team',
                         };
                         const page = pageMap[lnk.label] || lnk.label.toLowerCase().replace(/\s+/g, '-');
                         onNavigate(page);
-                        // Cerrar menú después de navegar
                         if (isExpanded) {
                           toggleMenu();
                         }
@@ -333,6 +330,38 @@ const CardNav: React.FC<CardNavProps> = ({
               </div>
             </div>
           ))}
+
+          {user && (
+            <div
+              className="nav-card select-none relative flex flex-col gap-2 p-[12px_16px] rounded-[calc(0.75rem-0.2rem)] min-w-0 flex-[1_1_auto] h-auto min-h-[60px] sm:hidden"
+              style={{ backgroundColor: '#0f172a', color: '#fff' }}
+            >
+              <div className="nav-card-label font-normal tracking-[-0.5px] text-[18px]">
+                Sesion
+              </div>
+              {onSettingsClick && (
+                <button
+                  onClick={() => {
+                    onSettingsClick();
+                    if (isExpanded) {
+                      toggleMenu();
+                    }
+                  }}
+                  className="inline-flex items-center gap-[8px] text-left text-[15px] text-white/85 hover:opacity-80 transition-opacity"
+                >
+                  <Settings className="w-4 h-4 shrink-0 text-white/70" />
+                  Configuracion
+                </button>
+              )}
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-[8px] text-left text-[15px] text-red-300 hover:opacity-80 transition-opacity"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                Cerrar sesion
+              </button>
+            </div>
+          )}
         </div>
       </nav>
     </div>

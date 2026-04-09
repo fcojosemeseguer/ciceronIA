@@ -19,8 +19,6 @@ import {
   DebateModeScreen,
   SettingsScreen,
   AnalysisSetupScreen,
-  ProjectsScreen,
-  ProjectDetailsScreen,
   PublicDashboardScreen,
   // Nuevos componentes
   DebatesScreen,
@@ -33,7 +31,9 @@ import { useDebateStore } from './store/debateStore';
 import { useDebateStore as useUnifiedDebateStore } from './store/debateStoreUnified';
 import { DebateHistory, Project, Debate, DebateMode } from './types';
 import { Dock, LiquidGlassButton } from './components/common';
-import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, Settings, History } from 'lucide-react';
+import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, History } from 'lucide-react';
+import { loadLiveDebateSession } from './utils/debatePersistence';
+import { applyTheme, getStoredTheme } from './utils/theme';
 import './App.css';
 
 type AppScreen = 
@@ -44,8 +44,8 @@ type AppScreen =
   | 'setup' 
   | 'competition' 
   | 'scoring' 
-  | 'projects'           // LEGACY - mantener durante transición
-  | 'project-details'    // LEGACY - mantener durante transición
+  | 'projects'
+  | 'project-details'
   | 'analysis-setup'
   | 'analysis' 
   | 'analysis-results'
@@ -69,18 +69,36 @@ function App() {
   const [publicDashboardToken, setPublicDashboardToken] = useState<string | null>(null);
   
   // NUEVO: Estados para el sistema simplificado de debates
-  const { currentDebate: selectedUnifiedDebate, selectDebate: selectUnifiedDebate } = useUnifiedDebateStore();
+  const {
+    currentDebate: selectedUnifiedDebate,
+    selectDebate: selectUnifiedDebate,
+  } = useUnifiedDebateStore();
   const [configMode, setConfigMode] = useState<DebateMode>('live');
   
   // LEGACY: Mantener compatibilidad durante transición
   const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
 
   // Función para navegar guardando historial
-  const navigateTo = (screen: AppScreen) => {
-    if (screen !== currentScreen) {
-      setScreenHistory(prev => [...prev, screen]);
-      setCurrentScreen(screen);
+  type NavigationMode = 'push' | 'replace' | 'reset';
+
+  const navigateTo = (screen: AppScreen, mode: NavigationMode = 'push') => {
+    if (screen === currentScreen && mode !== 'reset') {
+      return;
     }
+
+    setScreenHistory((prev) => {
+      switch (mode) {
+        case 'replace':
+          return prev.length > 0 ? [...prev.slice(0, -1), screen] : [screen];
+        case 'reset':
+          return [screen];
+        case 'push':
+        default:
+          return [...prev, screen];
+      }
+    });
+
+    setCurrentScreen(screen);
   };
 
   // Función para volver atrás
@@ -95,6 +113,7 @@ function App() {
   };
 
   useEffect(() => {
+    applyTheme(getStoredTheme());
     checkAuth();
     const path = window.location.pathname;
     const publicDashboardMatch = path.match(/^\/public\/dashboard\/([^/]+)$/);
@@ -112,16 +131,17 @@ function App() {
   }, [checkAuth]);
 
   // Navegación básica
-  const handleGoToLanding = () => navigateTo('landing');
-  const handleGoToDashboard = () => navigateTo('dashboard');
+  const handleGoToLanding = () => navigateTo('landing', 'replace');
+  const handleGoToDashboard = () => navigateTo('dashboard', 'replace');
+  const handleGoToSettings = () => navigateTo('settings');
   
   // Auth
   const handleAuthenticated = () => {
     if (pendingRedirectAfterAuth) {
-      navigateTo(pendingRedirectAfterAuth);
+      navigateTo(pendingRedirectAfterAuth, 'replace');
       setPendingRedirectAfterAuth(null);
     } else {
-      navigateTo('dashboard');
+      navigateTo('dashboard', 'replace');
     }
   };
   
@@ -163,7 +183,26 @@ function App() {
 
   // Handler para seleccionar un debate de la lista
   const handleSelectDebateFromList = (debate: Debate) => {
-    selectUnifiedDebate(debate);
+    const persistedLiveSession = loadLiveDebateSession(debate.code);
+    const resolvedDebate = persistedLiveSession
+      ? { ...debate, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+      : debate;
+
+    selectUnifiedDebate(resolvedDebate);
+    if (resolvedDebate.status === 'draft' || resolvedDebate.status === 'in_progress') {
+      navigateTo(resolvedDebate.mode === 'live' ? 'competition' : 'analysis');
+      return;
+    }
+    navigateTo('debate-view');
+  };
+
+  const handleViewDebateDetails = (debate: Debate) => {
+    const persistedLiveSession = loadLiveDebateSession(debate.code);
+    selectUnifiedDebate(
+      persistedLiveSession
+        ? { ...debate, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+        : debate
+    );
     navigateTo('debate-view');
   };
 
@@ -176,15 +215,16 @@ function App() {
 
   const handleAnalyzeRecorded = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('projects');
+      handleGoToAuth('debate-mode');
       return;
     }
-    navigateTo('projects');
+    setConfigMode('analysis');
+    navigateTo('debate-config');
   };
 
   const handleSelectProject = (project: Project) => {
     setSelectedAnalysisProject(project);
-    navigateTo('project-details');
+    navigateTo('analysis');
   };
 
   const handleStartLiveDebate = (project: Project) => {
@@ -202,15 +242,17 @@ function App() {
 
   // Debate Mode Selection - LEGACY
   const handleSelectLiveDebate = () => {
-    navigateTo('setup');
+    setConfigMode('live');
+    navigateTo('debate-config');
   };
 
   const handleSelectRecordedDebate = () => {
     if (!isAuthenticated) {
-      handleGoToAuth('projects');
+      handleGoToAuth('debate-mode');
       return;
     }
-    navigateTo('projects');
+    setConfigMode('analysis');
+    navigateTo('debate-config');
   };
 
   // Analysis
@@ -220,7 +262,7 @@ function App() {
 
   const handleBackFromAnalysis = () => {
     clearUploads();
-    navigateTo('dashboard');
+    navigateTo('dashboard', 'replace');
   };
 
   // Flujo legacy
@@ -239,7 +281,7 @@ function App() {
 
   const handleBackToHome = () => {
     selectDebate(null);
-    navigateTo('home');
+    navigateTo('home', 'replace');
   };
 
   // Estados para confirmación de salida
@@ -247,11 +289,10 @@ function App() {
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
 
   const confirmExit = () => {
-    if (pendingNavigation) {
-      pendingNavigation();
-      setPendingNavigation(null);
-    }
+    const navigation = pendingNavigation;
+    setPendingNavigation(null);
     setShowExitConfirm(false);
+    navigation?.();
   };
 
   const cancelExit = () => {
@@ -263,15 +304,39 @@ function App() {
   const handleFinishDebate = () => navigateTo('scoring');
   const handleFinishScoring = () => navigateTo('dashboard');
 
-  const { state: debateState } = useDebateStore();
+  const { state: debateState, pauseDebate } = useDebateStore();
 
   const isDebateActive = () => {
     return currentScreen === 'competition' && (debateState === 'running' || debateState === 'paused');
   };
 
+  const freezeLiveDebate = () => {
+    if (!isDebateActive()) {
+      return;
+    }
+
+    pauseDebate();
+
+    if (
+      selectedUnifiedDebate &&
+      selectedUnifiedDebate.mode === 'live' &&
+      selectedUnifiedDebate.status === 'draft'
+    ) {
+      const updatedDebate = {
+        ...selectedUnifiedDebate,
+        status: 'in_progress' as const,
+      };
+
+      selectUnifiedDebate(updatedDebate);
+    }
+  };
+
   const handleNavigationWithConfirm = (navigationFn: () => void) => {
     if (isDebateActive()) {
-      setPendingNavigation(() => navigationFn);
+      setPendingNavigation(() => () => {
+        freezeLiveDebate();
+        navigationFn();
+      });
       setShowExitConfirm(true);
     } else {
       navigationFn();
@@ -282,13 +347,21 @@ function App() {
   const getDockItems = () => {
     const items = [];
     
+    if (currentScreen === 'dashboard') {
+      items.push({
+        icon: <Home className="w-6 h-6 text-white" />,
+        label: 'Inicio',
+        onClick: () => handleNavigationWithConfirm(handleGoToLanding)
+      });
+    }
+
     // Siempre mostrar: Ir al Dashboard (Panel de Control)
     // Excepto cuando ya estamos en el Dashboard
     if (currentScreen !== 'dashboard') {
       items.push({
         icon: <LayoutDashboard className="w-6 h-6 text-white" />,
         label: 'Panel',
-        onClick: () => handleNavigationWithConfirm(() => navigateTo('dashboard'))
+        onClick: () => handleNavigationWithConfirm(() => navigateTo('dashboard', 'replace'))
       });
     }
 
@@ -297,7 +370,7 @@ function App() {
       items.push({
         icon: <Plus className="w-6 h-6 text-white" />,
         label: 'Nuevo Debate',
-        onClick: () => handleNewLiveDebate()
+        onClick: () => handleNewDebate()
       });
     }
 
@@ -310,19 +383,6 @@ function App() {
       });
     }
 
-    // Configuración del perfil - toggle
-    items.push({
-      icon: <Settings className="w-6 h-6 text-white" />,
-      label: 'Configuración',
-      onClick: () => handleNavigationWithConfirm(() => {
-        if (currentScreen === 'settings') {
-          navigateTo('dashboard');
-        } else {
-          navigateTo('settings');
-        }
-      })
-    });
-
     return items;
   };
 
@@ -330,8 +390,6 @@ function App() {
   const showDock = [
     'dashboard',
     'home', 
-    'projects',
-    'project-details',
     'debates',           // NUEVO
     'debate-config',     // NUEVO
     'debate-view',       // NUEVO
@@ -348,7 +406,7 @@ function App() {
   if (!isAuthChecked) {
     return (
       <div className="w-full h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00E5FF]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white/70"></div>
       </div>
     );
   }
@@ -360,6 +418,7 @@ function App() {
           <LandingPage 
             onStartDebate={handleStartDebateFromLanding} 
             onLogin={() => handleGoToAuth('dashboard')} 
+            onOpenSettings={isAuthenticated ? handleGoToSettings : undefined}
           />
         );
 
@@ -378,6 +437,8 @@ function App() {
             onNewDebate={handleNewDebate}
             onAnalyzeRecorded={handleAnalyzeRecorded}
             onViewHistory={handleViewHistory}
+            onGoToLanding={handleGoToLanding}
+            onGoToSettings={handleGoToSettings}
             // Nuevos handlers
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -395,26 +456,14 @@ function App() {
         );
 
       case 'projects':
-        return (
-          <ProjectsScreen
-            onSelectProject={handleSelectProject}
-            onStartLiveDebate={handleStartLiveDebate}
-            onBack={handleGoToDashboard}
-          />
-        );
-
       case 'project-details':
-        return selectedAnalysisProject ? (
-          <ProjectDetailsScreen
-            project={selectedAnalysisProject}
-            onBack={() => navigateTo('projects')}
-            onAddAnalysis={handleAddAnalysis}
-          />
-        ) : (
-          <ProjectsScreen
-            onSelectProject={handleSelectProject}
-            onStartLiveDebate={handleStartLiveDebate}
+        return (
+          <DebatesScreen
+            onSelectDebate={handleSelectDebateFromList}
+            onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
+            onNewLiveDebate={handleNewLiveDebate}
+            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -422,19 +471,20 @@ function App() {
         return selectedUnifiedDebate ? (
           <AnalysisScreen
             debate={selectedUnifiedDebate}
-            onBack={() => navigateTo('debates')}
+            onBack={() => navigateTo('debates', 'replace')}
             onViewResults={handleViewResults}
           />
         ) : selectedAnalysisProject ? (
           // LEGACY: Soporte para proyectos antiguos
           <AnalysisScreen
             project={selectedAnalysisProject}
-            onBack={() => navigateTo('project-details')}
+            onBack={() => navigateTo('debates', 'replace')}
             onViewResults={handleViewResults}
           />
         ) : (
           <DebatesScreen
             onSelectDebate={handleSelectDebateFromList}
+            onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -446,6 +496,7 @@ function App() {
         return (
           <DebatesScreen
             onSelectDebate={handleSelectDebateFromList}
+            onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -466,11 +517,17 @@ function App() {
         return selectedUnifiedDebate ? (
           <DebateDetailsScreenNew
             debate={selectedUnifiedDebate}
-            onBack={() => navigateTo('debates')}
+            onBack={() => navigateTo('debates', 'replace')}
+            onContinue={
+              selectedUnifiedDebate.status === 'draft' || selectedUnifiedDebate.status === 'in_progress'
+                ? () => navigateTo(selectedUnifiedDebate.mode === 'live' ? 'competition' : 'analysis')
+                : undefined
+            }
           />
         ) : (
           <DebatesScreen
             onSelectDebate={handleSelectDebateFromList}
+            onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -480,7 +537,7 @@ function App() {
       case 'analysis-results':
         return (
           <AnalysisResultsScreen
-            onBack={() => setCurrentScreen('analysis')}
+            onBack={() => navigateTo('analysis', 'replace')}
           />
         );
 
@@ -501,18 +558,19 @@ function App() {
           <CompetitionScreen 
             debate={selectedUnifiedDebate} 
             onFinish={handleFinishDebate}
-            onBack={() => navigateTo('debates')}
+            onBack={() => handleNavigationWithConfirm(() => navigateTo('debates', 'replace'))}
           />
         ) : selectedAnalysisProject ? (
           // LEGACY: Soporte para proyectos antiguos
           <CompetitionScreen 
             project={selectedAnalysisProject} 
             onFinish={handleFinishDebate}
-            onBack={() => navigateTo('project-details')}
+            onBack={() => handleNavigationWithConfirm(() => navigateTo('debates', 'replace'))}
           />
         ) : (
           <DebatesScreen
             onSelectDebate={handleSelectDebateFromList}
+            onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -538,15 +596,15 @@ function App() {
             token={publicDashboardToken}
             onBack={() => {
               setPublicDashboardToken(null);
-              navigateTo('landing');
+              navigateTo('landing', 'replace');
             }}
           />
         ) : (
-          <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />
+          <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />
         );
 
       default:
-        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} />;
+        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />;
     }
   };
 
@@ -578,13 +636,13 @@ function App() {
                 <AlertTriangle className="w-6 h-6 text-yellow-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">¿Salir del debate?</h3>
-                <p className="text-white/50 text-sm">El debate está en curso</p>
+                <h3 className="text-xl font-bold text-white">Pausar y salir</h3>
+                <p className="text-white/50 text-sm">El debate en vivo quedará congelado</p>
               </div>
             </div>
 
             <p className="text-white/70 mb-6">
-              Si sales ahora, perderás el progreso del debate actual. ¿Estás seguro de que quieres salir?
+              Si sales ahora, el cronómetro se pausará y podrás continuar este debate después desde Debates Anteriores exactamente donde lo dejaste.
             </p>
 
             <div className="flex gap-3">
@@ -601,7 +659,7 @@ function App() {
                 variant="danger"
                 className="flex-1"
               >
-                Salir
+                Pausar y salir
               </LiquidGlassButton>
             </div>
           </div>

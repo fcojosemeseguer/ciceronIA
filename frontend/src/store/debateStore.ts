@@ -18,11 +18,12 @@ import {
   getCurrentRoundInfo,
   isLastRound,
 } from '../utils/roundsSequence';
+import { clearLiveDebateSession, loadLiveDebateSession, saveLiveDebateSession } from '../utils/debatePersistence';
 
 // Estado inicial por defecto
 const defaultConfig: DebateConfig = {
-  teamAName: 'Equipo A',
-  teamBName: 'Equipo B',
+  teamAName: 'A favor',
+  teamBName: 'En contra',
   debateTopic: 'Tema del Debate',
   roundDurations: {
     introduccion: 180,
@@ -44,14 +45,33 @@ const createInitialState = (config: DebateConfig): DebateSessionState & { analys
   analysisQueue: [],
 });
 
+const persistCurrentSession = (state: Pick<DebateStore, 'currentDebateCode' | 'config' | 'state' | 'currentRoundIndex' | 'currentTeam' | 'timeRemaining' | 'isTimerRunning' | 'recordings' | 'analysisResults' | 'analysisQueue'>) => {
+  if (!state.currentDebateCode) return;
+
+  saveLiveDebateSession({
+    debateCode: state.currentDebateCode,
+    config: state.config,
+    state: state.state,
+    currentRoundIndex: state.currentRoundIndex,
+    currentTeam: state.currentTeam,
+    timeRemaining: state.timeRemaining,
+    isTimerRunning: state.isTimerRunning,
+    recordings: state.recordings,
+    analysisResults: state.analysisResults,
+    analysisQueue: state.analysisQueue,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
 interface DebateStore extends DebateSessionState {
+  currentDebateCode: string | null;
   // Estado de análisis en tiempo real
   analysisResults: AnalysisResult[];
   analysisQueue: { recordingId: string; status: 'pending' | 'analyzing' | 'completed' | 'error' }[];
   
   // Inicialización
-  initializeDebate: (config: DebateConfig) => void;
-  initializeDebateFromProject: (project: Project) => void;
+  initializeDebate: (config: DebateConfig, debateCode?: string) => void;
+  initializeDebateFromProject: (project: Project, debateCode?: string) => void;
 
   // Control de tiempo
   setTimeRemaining: (time: number) => void;
@@ -96,10 +116,30 @@ export const useDebateStore = create<DebateStore>()(
   subscribeWithSelector((set, get) => ({
     // Estado inicial
     ...createInitialState(defaultConfig),
+    currentDebateCode: null,
 
     // Inicialización
-    initializeDebate: (config: DebateConfig) => {
+    initializeDebate: (config: DebateConfig, debateCode?: string) => {
+      const persistedSession = debateCode ? loadLiveDebateSession(debateCode) : null;
+
+      if (persistedSession) {
+        set({
+          currentDebateCode: debateCode || persistedSession.debateCode,
+          config: persistedSession.config,
+          state: persistedSession.state,
+          currentRoundIndex: persistedSession.currentRoundIndex,
+          currentTeam: persistedSession.currentTeam,
+          timeRemaining: persistedSession.timeRemaining,
+          isTimerRunning: persistedSession.isTimerRunning,
+          recordings: persistedSession.recordings,
+          analysisResults: persistedSession.analysisResults,
+          analysisQueue: persistedSession.analysisQueue,
+        });
+        return;
+      }
+
       set({
+        currentDebateCode: debateCode || null,
         config,
         state: 'setup',
         currentRoundIndex: 0,
@@ -110,10 +150,11 @@ export const useDebateStore = create<DebateStore>()(
         analysisResults: [],
         analysisQueue: [],
       });
+      persistCurrentSession(get());
     },
 
     // Inicializar debate desde un proyecto (unifica debate y proyecto)
-    initializeDebateFromProject: (project: Project) => {
+    initializeDebateFromProject: (project: Project, debateCode?: string) => {
       // Determinar duraciones según el tipo de debate
       const isRetor = project.debate_type === 'retor';
       const roundDurations = isRetor
@@ -131,13 +172,14 @@ export const useDebateStore = create<DebateStore>()(
           };
 
       const config: DebateConfig = {
-        teamAName: project.team_a_name || 'Equipo A',
-        teamBName: project.team_b_name || 'Equipo B',
+        teamAName: project.team_a_name || 'A favor',
+        teamBName: project.team_b_name || 'En contra',
         debateTopic: project.debate_topic || project.name || 'Tema del Debate',
         roundDurations,
       };
 
       set({
+        currentDebateCode: debateCode || project.code || null,
         config,
         state: 'setup',
         currentRoundIndex: 0,
@@ -148,12 +190,14 @@ export const useDebateStore = create<DebateStore>()(
         analysisResults: [],
         analysisQueue: [],
       });
+      persistCurrentSession(get());
     },
 
     // Control de tiempo - AHORA PERMITE TIEMPO NEGATIVO (Tiempo Extra)
     setTimeRemaining: (time: number) => {
       // Ya no limitamos a 0, permitimos negativos para tiempo extra
       set({ timeRemaining: time });
+      persistCurrentSession(get());
     },
 
     decrementTime: () => {
@@ -166,22 +210,26 @@ export const useDebateStore = create<DebateStore>()(
 
     setTimerRunning: (running: boolean) => {
       set({ isTimerRunning: running });
+      persistCurrentSession(get());
     },
 
     // Control de flujo
     pauseDebate: () => {
       set({ state: 'paused', isTimerRunning: false });
+      persistCurrentSession(get());
     },
 
     resumeDebate: () => {
       const state = get();
       if (state.state === 'paused') {
         set({ state: 'running', isTimerRunning: true });
+        persistCurrentSession(get());
       }
     },
 
     startDebate: () => {
       set({ state: 'running', isTimerRunning: true });
+      persistCurrentSession(get());
     },
 
     skipToNextRound: () => {
@@ -208,6 +256,7 @@ export const useDebateStore = create<DebateStore>()(
           isTimerRunning: true, // Auto-start timer
           state: 'running', // Ensure running state
         });
+        persistCurrentSession(get());
       }
     },
 
@@ -226,6 +275,7 @@ export const useDebateStore = create<DebateStore>()(
             isTimerRunning: true,
             state: 'running',
           });
+          persistCurrentSession(get());
           console.log(`🎬 Jumping to Team A turn at round ${i + 1}`);
           return;
         }
@@ -247,6 +297,7 @@ export const useDebateStore = create<DebateStore>()(
             isTimerRunning: true,
             state: 'running',
           });
+          persistCurrentSession(get());
           console.log(`🎬 Jumping to Team B turn at round ${i + 1}`);
           return;
         }
@@ -275,6 +326,7 @@ export const useDebateStore = create<DebateStore>()(
           timeRemaining: nextRound.duration,
           isTimerRunning: false, // Don't auto-start timer on nextRound
         });
+        persistCurrentSession(get());
       }
     },
 
@@ -294,17 +346,23 @@ export const useDebateStore = create<DebateStore>()(
           timeRemaining: prevRound.duration,
           isTimerRunning: false, // Don't auto-start timer on previousRound
         });
+        persistCurrentSession(get());
       }
     },
 
     finishDebate: () => {
       set({ state: 'finished', isTimerRunning: false });
+      const currentDebateCode = get().currentDebateCode;
+      if (currentDebateCode) {
+        clearLiveDebateSession(currentDebateCode);
+      }
     },
 
     // Grabaciones
     addRecording: (recording: AudioRecording) => {
       const state = get();
       set({ recordings: [...state.recordings, recording] });
+      persistCurrentSession(get());
     },
 
     getRecordings: () => {
@@ -315,6 +373,7 @@ export const useDebateStore = create<DebateStore>()(
     addAnalysisResult: (result: AnalysisResult) => {
       const state = get();
       set({ analysisResults: [...state.analysisResults, result] });
+      persistCurrentSession(get());
     },
 
     getAnalysisResults: () => {
@@ -343,6 +402,7 @@ export const useDebateStore = create<DebateStore>()(
           { recordingId, status: 'pending' }
         ]
       });
+      persistCurrentSession(get());
     },
 
     updateAnalysisQueueStatus: (recordingId: string, status: 'pending' | 'analyzing' | 'completed' | 'error') => {
@@ -352,6 +412,7 @@ export const useDebateStore = create<DebateStore>()(
           item.recordingId === recordingId ? { ...item, status } : item
         )
       });
+      persistCurrentSession(get());
     },
 
     // Getters

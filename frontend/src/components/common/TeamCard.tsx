@@ -1,11 +1,9 @@
 /**
- * Componente TeamCard - Panel de equipo con temporizador
- * Responsivo: Desktop, Tablet, Mobile
- * Soporta TIEMPO EXTRA (tiempos negativos)
+ * Componente TeamCard - Vista minimalista del equipo.
  */
 
 import React from 'react';
-import { TeamPosition, RoundType } from '../../types';
+import { TeamPosition } from '../../types';
 import { formatTime } from '../../hooks/useDebateTimer';
 
 interface TeamCardProps {
@@ -14,8 +12,6 @@ interface TeamCardProps {
   isActive: boolean;
   timeRemaining: number;
   maxTime: number;
-  roundType?: RoundType;
-  roundOrder?: number;
 }
 
 export const TeamCard: React.FC<TeamCardProps> = ({
@@ -23,89 +19,55 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   teamName,
   isActive,
   timeRemaining,
-  maxTime,
-  roundType,
-  roundOrder,
 }) => {
   const isTeamA = teamId === 'A';
-  const isOvertime = timeRemaining < 0; // Detectar tiempo extra
-  const progress = Math.max(0, (timeRemaining / maxTime) * 100); // No permitir progreso negativo
+  const isOvertime = timeRemaining < 0;
+  const accentColor = isTeamA ? '#FF6B00' : '#00E5FF';
+  const sideLabel = isTeamA ? 'A favor' : 'En contra';
+  const timerValue = isActive ? formatTime(timeRemaining) : '00:00';
 
   return (
-    <div
-      className={`
-        flex flex-col gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-2xl
-        border-2 sm:border-4 border-black
-        ${isActive ? 'transition-smooth' : 'opacity-40 md:opacity-50 transition-smooth'}
-        ${isActive && isTeamA && !isOvertime ? 'glow-pulse-orange' : ''}
-        ${isActive && !isTeamA && !isOvertime ? 'glow-pulse-cyan' : ''}
-        ${isActive && isOvertime ? 'glow-pulse-red' : ''} /* Parpadeo rojo en tiempo extra */
-        min-h-20 sm:min-h-24 md:min-h-28 flex-1
-      `}
+    <section
+      className="relative flex min-h-[420px] flex-1 flex-col justify-between overflow-hidden rounded-[30px] border px-6 py-6 sm:px-8 sm:py-8"
       style={{
-        background: isTeamA
-          ? 'linear-gradient(135deg, #3d1a00 0%, #111827 100%)'
-          : 'linear-gradient(135deg, #002a3d 0%, #111827 100%)',
+        borderColor: isActive ? `${accentColor}78` : 'rgba(255,255,255,0.08)',
+        background: `linear-gradient(180deg, ${isActive
+          ? isTeamA ? 'rgba(255,107,0,0.20)' : 'rgba(0,229,255,0.20)'
+          : isTeamA ? 'rgba(255,107,0,0.06)' : 'rgba(0,229,255,0.06)'} 0%, rgba(15,23,42,0.92) 38%, rgba(15,23,42,1) 100%)`,
+        boxShadow: isActive
+          ? `0 28px 70px rgba(2, 6, 23, 0.46), 0 0 0 1px ${accentColor}30 inset, 0 0 36px ${accentColor}22`
+          : '0 18px 44px rgba(2, 6, 23, 0.28)',
       }}
     >
-      {/* Header con degradado */}
-      <div
-        className={`
-          px-2 sm:px-4 py-2 sm:py-3 rounded-lg text-center
-          ${isTeamA ? 'bg-gradient-to-r from-[#FF6B00] to-[#CC5500]' : 'bg-gradient-to-r from-[#00E5FF] to-[#00B8CC]'}
-        `}
-      >
-        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white break-words">
+      <div>
+        <span
+          className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em]"
+          style={{
+            color: accentColor,
+            borderColor: `${accentColor}38`,
+            background: `${accentColor}10`,
+          }}
+        >
+          {sideLabel}
+        </span>
+
+        <h2 className="mt-5 break-words text-3xl font-semibold text-white sm:text-4xl">
           {teamName}
         </h2>
       </div>
 
-       {/* Temporizador digital */}
-       <div
-         className={`
-           text-center transition-smooth flex-1 flex items-center justify-center
-           text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-wider
-           ${!isActive ? 'text-gray-500' : ''}
-           ${isActive && !isOvertime ? 'text-white' : ''}
-           ${isActive && isOvertime ? 'text-red-400 animate-pulse' : ''} /* Rojo y parpadeante en tiempo extra */
-         `}
-       >
-         {isActive ? formatTime(timeRemaining) : '00:00'}
-       </div>
-
-      {/* Barra de progreso - Se vacía en tiempo extra */}
-      <div className="mt-auto">
-        <div className="progress-bar-bg">
-          <div
-            className={`progress-bar-fill transition-smooth ${
-              isOvertime 
-                ? 'bg-red-500' /* Rojo cuando hay tiempo extra */
-                : isTeamA 
-                  ? 'bg-[#FF6B00]' 
-                  : 'bg-[#00E5FF]'
-            }`}
-            style={{ width: `${progress}%` }}
-          />
+      <div className="flex flex-1 items-center justify-center">
+        <div
+          className={`text-center text-7xl font-semibold tracking-tight sm:text-8xl lg:text-[7.5rem] ${
+            isOvertime ? 'animate-pulse text-red-400' : isActive ? 'text-white' : 'text-white/22'
+          }`}
+        >
+          {timerValue}
         </div>
       </div>
 
-      {/* Indicador de estado */}
-      {isActive && (
-        <div
-          className={`
-            text-center text-xs font-semibold py-2 rounded-lg
-            ${isOvertime 
-              ? 'bg-red-500/20 text-red-400 animate-pulse' /* Indicador de tiempo extra */
-              : isTeamA 
-                ? 'bg-[#FF6B00]/20 text-[#FF6B00]' 
-                : 'bg-[#00E5FF]/20 text-[#00E5FF]'
-            }
-          `}
-        >
-          {isOvertime ? '⚠️ TIEMPO EXTRA' : 'EN TURNO'}
-        </div>
-      )}
-    </div>
+      <div className="h-2" />
+    </section>
   );
 };
 

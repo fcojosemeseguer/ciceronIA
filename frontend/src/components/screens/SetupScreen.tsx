@@ -25,7 +25,7 @@ const DEBATE_TYPES = [
       { name: 'Refutación 2', time: '4 min', speakers: '1 por equipo' },
       { name: 'Conclusión', time: '3 min', speakers: '1 por equipo' },
     ],
-    color: 'from-blue-500 to-cyan-600',
+    color: 'from-white/20 to-white/5',
     features: ['Estructura clásica', 'Tiempos fijos por orador', 'Evaluación por rondas'],
   },
   {
@@ -38,7 +38,7 @@ const DEBATE_TYPES = [
       { name: 'Valoración', time: '5 min', speakers: 'Equipo (libre)' },
       { name: 'Conclusión', time: '3 min', speakers: '1 por equipo' },
     ],
-    color: 'from-orange-500 to-red-600',
+    color: 'from-white/20 to-white/5',
     features: ['Gestión libre de tiempo', 'Minuto de oro disponible', 'Mayor flexibilidad'],
   },
 ];
@@ -47,10 +47,15 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
   const { initializeDebate } = useDebateStore();
   const [error, setError] = useState('');
   const [selectedType, setSelectedType] = useState('upct');
+  const scrollToTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const [formData, setFormData] = useState({
-    teamAName: 'Equipo A',
-    teamBName: 'Equipo B',
+    teamAName: 'A favor',
+    teamBName: 'En contra',
     debateTopic: '',
     debateDescription: '',
   });
@@ -66,16 +71,19 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
   const handleStart = () => {
     if (!formData.debateTopic.trim()) {
       setError('Debes ingresar un tema para el debate');
+      scrollToTop();
       return;
     }
     
     if (!formData.teamAName.trim()) {
-      setError('Debes ingresar el nombre del Equipo A');
+      setError('Debes ingresar el nombre de la postura a favor');
+      scrollToTop();
       return;
     }
     
     if (!formData.teamBName.trim()) {
-      setError('Debes ingresar el nombre del Equipo B');
+      setError('Debes ingresar el nombre de la postura en contra');
+      scrollToTop();
       return;
     }
     
@@ -144,27 +152,27 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[#FF6B00] text-sm font-medium mb-2">
-                      Equipo A (A favor)
+                      A favor
                     </label>
                     <input
                       type="text"
                       value={formData.teamAName}
                       onChange={(e) => handleInputChange(e, 'teamAName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF6B00]/50 transition-colors"
-                      placeholder="Nombre del equipo"
+                      placeholder="Nombre de la postura a favor"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[#00E5FF] text-sm font-medium mb-2">
-                      Equipo B (En contra)
+                      En contra
                     </label>
                     <input
                       type="text"
                       value={formData.teamBName}
                       onChange={(e) => handleInputChange(e, 'teamBName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                      placeholder="Nombre del equipo"
+                      placeholder="Nombre de la postura en contra"
                     />
                   </div>
                 </div>
@@ -231,9 +239,9 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                       }`}
                     >
                       <div className="flex items-start gap-4">
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${type.color} flex items-center justify-center flex-shrink-0`}>
-                          <Clock className="w-6 h-6 text-white" />
-                        </div>
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${type.color} border border-white/10 flex items-center justify-center flex-shrink-0`}>
+                            <Clock className="w-6 h-6 text-white" />
+                          </div>
                         
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">

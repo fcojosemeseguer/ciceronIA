@@ -160,6 +160,35 @@ def get_project_for_user(user_code: str, project_code: str):
         return None
 
 
+def delete_project_for_user(user_code: str, project_code: str) -> bool:
+    try:
+        owned_project = projects_table.get(
+            (User.code == project_code) & (User.user_code == user_code)
+        )
+        if not owned_project:
+            return False
+
+        projects_table.remove((User.code == project_code) & (User.user_code == user_code))
+        analysis_table.remove(User.project_code == project_code)
+        teams_table.remove(User.project_code == project_code)
+        audios_path_table.remove(User.project_code == project_code)
+        audios_transcription_table.remove(User.project_code == project_code)
+        audios_metrics_table.remove(User.project_code == project_code)
+        project_segments_table.remove(User.project_code == project_code)
+        project_share_links_table.remove(User.project_code == project_code)
+
+        try:
+            chat_history_table = db.table('chat_history')
+            chat_history_table.remove(User.project_id == project_code)
+        except Exception:
+            pass
+
+        return True
+    except Exception as e:
+        print(f"error {e}")
+        return False
+
+
 def get_projects_paginated(
     user_code: str,
     q: str | None = None,

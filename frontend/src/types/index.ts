@@ -471,6 +471,7 @@ export interface AudioUpload {
   postura: string;
   numOradores: number;
   file: File | null;
+  persistedFileName?: string;
   wavBlob?: Blob;
   status: 'pending' | 'converting' | 'uploading' | 'analyzing' | 'completed' | 'error';
   progress?: number;

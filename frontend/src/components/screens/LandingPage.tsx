@@ -5,17 +5,18 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { AuroraBackground, CardNav, LiquidGlassButton } from '../common';
+import { AuroraBackground, CardNav } from '../common';
 import { MessageSquare, Trophy, Sparkles, Mic, Users, Brain, Clock, Github, Linkedin, Twitter } from 'lucide-react';
 
 interface LandingPageProps {
   onStartDebate: () => void;
   onLogin: (redirectTo?: 'home') => void;
+  onOpenSettings?: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin, onOpenSettings }) => {
   const { isAuthenticated } = useAuthStore();
-  const [activeSection, setActiveSection] = useState('home');
+  const [, setActiveSection] = useState('home');
 
   const handleStartDebate = () => {
     if (isAuthenticated) {
@@ -72,7 +73,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
   const navItems = [
     {
       label: "Inicio",
-      bgColor: "#170D27",
+      bgColor: "#111827",
       textColor: "#fff",
       links: [
         { label: "Empezar", href: "#", ariaLabel: "Empezar debate" },
@@ -81,7 +82,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
     },
     {
       label: "Cómo funciona",
-      bgColor: "#0D0716",
+      bgColor: "#0f172a",
       textColor: "#fff",
       links: [
         { label: "Inicio", href: "#", ariaLabel: "Ir al inicio" },
@@ -90,7 +91,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
     },
     {
       label: "Equipo",
-      bgColor: "#271E37", 
+      bgColor: "#172033", 
       textColor: "#fff",
       links: [
         { label: "Nosotros", href: "#", ariaLabel: "Conocer al equipo" },
@@ -108,9 +109,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
             items={navItems}
             onLogin={onLogin}
             onNavigate={handleNavigate}
-            baseColor="rgba(255, 255, 255, 0.1)"
+            onSettingsClick={onOpenSettings}
+            baseColor="rgba(2, 6, 23, 0.68)"
             menuColor="#fff"
-            buttonBgColor="#111"
+            buttonBgColor="#0f172a"
             buttonTextColor="#fff"
           />
         </div>
@@ -118,22 +120,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
         {/* Hero Section - Inicio */}
         <section id="home" className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 pt-32 pb-12 scroll-mt-32">
           <div className="max-w-4xl mx-auto text-center">
-            {/* Título Principal */}
-            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white mb-4">
-              CiceronAI
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-sm text-white/60 mb-6">
+              <span className="w-2 h-2 rounded-full bg-[#00E5FF]" />
+              <span>Debate, evaluación y seguimiento</span>
+            </div>
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-4">
+              CiceronIA
             </h1>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium text-white/80 mb-8">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium text-white/75 mb-5">
               El Juez IA de Debate
             </h2>
+            <p className="max-w-2xl mx-auto text-base sm:text-lg text-white/55 leading-relaxed mb-10">
+              Una interfaz más limpia para preparar debates, continuar sesiones y comparar equipos con claridad.
+            </p>
 
             {/* Botón CTA */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
               <button
                 onClick={handleStartDebate}
-                className="group relative px-12 py-5 text-2xl font-bold transition-all duration-300 hover:scale-105 rounded-2xl"
+                className="group relative px-12 py-5 text-2xl font-bold transition-all duration-300 hover:-translate-y-0.5 rounded-2xl bg-slate-950/80 border border-white/10 shadow-[0_20px_40px_rgba(2,6,23,0.32)]"
                 style={{
-                  border: '2px solid transparent',
-                  background: 'linear-gradient(#0f172a, #0f172a) padding-box, linear-gradient(to right, #FF6B00, #00E5FF) border-box'
+                  backgroundImage:
+                    'linear-gradient(rgba(2,6,23,0.86), rgba(2,6,23,0.86)), linear-gradient(to right, rgba(255,107,0,0.65), rgba(0,229,255,0.65))',
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box'
                 }}
               >
                 <span className="bg-gradient-to-r from-[#FF6B00] to-[#00E5FF] bg-clip-text text-transparent">
@@ -163,11 +173,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               ].map((feature, index) => (
                 <div 
                   key={index}
-                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/[0.035] border border-white/10 hover:bg-white/[0.055] transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                 >
-                  <feature.icon className="w-8 h-8 text-[#00E5FF] mx-auto mb-4" />
+                  <div className="w-12 h-12 rounded-xl mx-auto mb-4 bg-slate-950/70 border border-white/10 flex items-center justify-center">
+                    <feature.icon className="w-6 h-6 text-[#00E5FF]" />
+                  </div>
                   <h3 className="text-white font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-white/50 text-sm">{feature.description}</p>
+                  <p className="text-white/50 text-sm leading-relaxed">{feature.description}</p>
                 </div>
               ))}
             </div>
@@ -183,7 +195,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
                 Cómo Funciona
               </h2>
               <p className="text-lg text-white/60 max-w-2xl mx-auto">
-                Descubre cómo CiceronAI revoluciona la forma de organizar y evaluar debates
+                Descubre cómo CiceronIA revoluciona la forma de organizar y evaluar debates
               </p>
             </div>
 
@@ -218,11 +230,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               ].map((step, index) => (
                 <div 
                   key={index}
-                  className="flex gap-6 p-6 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="flex gap-6 p-6 rounded-2xl backdrop-blur-sm bg-white/[0.035] border border-white/10 hover:bg-white/[0.055] transition-colors"
                 >
                   <div className="flex-shrink-0">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#FF6B00]/20 to-[#00E5FF]/20 border border-white/10 flex items-center justify-center">
-                      <step.icon className="w-7 h-7 text-[#00E5FF]" />
+                    <div className="w-14 h-14 rounded-xl bg-slate-950/70 border border-white/10 flex items-center justify-center">
+                      <step.icon className={`w-7 h-7 ${index % 2 === 0 ? 'text-[#00E5FF]' : 'text-[#FF6B00]'}`} />
                     </div>
                   </div>
                   <div>
@@ -251,13 +263,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               ].map((feature, index) => (
                 <div 
                   key={index}
-                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10"
+                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/[0.035] border border-white/10"
                 >
                   <h3 className="text-lg font-semibold text-white mb-4">{feature.title}</h3>
                   <ul className="space-y-2">
                     {feature.items.map((item, itemIndex) => (
                       <li key={itemIndex} className="flex items-center gap-2 text-white/60 text-sm">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00E5FF]" />
+                        <div className={`w-1.5 h-1.5 rounded-full ${itemIndex % 2 === 0 ? 'bg-[#00E5FF]' : 'bg-[#FF6B00]'}`} />
                         {item}
                       </li>
                     ))}
@@ -304,7 +316,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               ].map((value, index) => (
                 <div 
                   key={index}
-                  className="p-4 rounded-xl backdrop-blur-sm bg-white/5 border border-white/10 text-center"
+                  className="p-4 rounded-xl backdrop-blur-sm bg-white/[0.035] border border-white/10 text-center"
                 >
                   <h3 className="text-white font-semibold mb-2">{value.title}</h3>
                   <p className="text-white/50 text-sm">{value.description}</p>
@@ -318,7 +330,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
                 {
                   name: 'Francisco Pérez',
                   role: 'Fundador & CEO',
-                  description: 'Apasionado por el debate y la inteligencia artificial. Creador de la visión de CiceronAI.',
+                  description: 'Apasionado por el debate y la inteligencia artificial. Creador de la visión de CiceronIA.',
                   avatar: 'FP'
                 },
                 {
@@ -342,10 +354,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               ].map((member, index) => (
                 <div 
                   key={index}
-                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="p-6 rounded-2xl backdrop-blur-sm bg-white/[0.035] border border-white/10 hover:bg-white/[0.055] transition-colors"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#FF6B00] to-[#00E5FF] flex items-center justify-center flex-shrink-0">
+                    <div className="w-16 h-16 rounded-full bg-slate-950/70 border border-white/10 flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold text-lg">{member.avatar}</span>
                     </div>
                     <div>
@@ -359,7 +371,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
             </div>
 
             {/* Contacto */}
-            <div className="text-center p-8 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10">
+            <div className="text-center p-8 rounded-2xl backdrop-blur-sm bg-white/[0.035] border border-white/10">
               <h3 className="text-2xl font-bold text-white mb-4">¿Quieres contactarnos?</h3>
               <p className="text-white/60 mb-6">
                 Estamos siempre abiertos a colaboraciones, sugerencias y nuevas ideas.
@@ -367,19 +379,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               <div className="flex justify-center gap-4">
                 <a 
                   href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition-colors"
                 >
                   <Twitter className="w-5 h-5 text-white/70" />
                 </a>
                 <a 
                   href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition-colors"
                 >
                   <Linkedin className="w-5 h-5 text-white/70" />
                 </a>
                 <a 
                   href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  className="p-3 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition-colors"
                 >
                   <Github className="w-5 h-5 text-white/70" />
                 </a>
@@ -391,7 +403,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
         {/* Footer */}
         <footer className="py-6 px-4 text-center border-t border-white/10">
           <p className="text-white/40 text-sm">
-            © 2026 CiceronAI. Todos los derechos reservados.
+            © 2026 CiceronIA. Todos los derechos reservados.
           </p>
         </footer>
       </div>
