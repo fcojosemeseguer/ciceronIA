@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useUnifiedDebateStore } from '../../store';
 import { Debate } from '../../types';
-import { BackLink, BrandHeader, Breadcrumbs, LiquidGlassButton } from '../common';
+import { BrandHeader, Breadcrumbs, LiquidGlassButton } from '../common';
 import liveIcon from '../../assets/icons/icon-envivo.svg';
 import analysisIcon from '../../assets/icons/icon-audioanalisis.svg';
 
@@ -19,8 +19,6 @@ interface DebatesScreenProps {
   onSelectDebate: (debate: Debate) => void;
   onViewDebateDetails?: (debate: Debate) => void;
   onBack: () => void;
-  onNewLiveDebate: () => void;
-  onNewAnalysis: () => void;
 }
 
 export const DebatesScreen: React.FC<DebatesScreenProps> = ({
@@ -50,6 +48,9 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
   });
 
   const getSortTimestamp = (debate: Debate) => {
+    if (typeof debate.created_ts === 'number' && Number.isFinite(debate.created_ts)) {
+      return debate.created_ts;
+    }
     const safeDate = (value?: string) => {
       if (!value) return 0;
       const timestamp = new Date(value).getTime();
@@ -95,10 +96,9 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
       <div className="px-5 py-8 sm:px-8">
         <div className="mx-auto w-full max-w-[1040px]">
           <BrandHeader className="mb-8" />
-          <Breadcrumbs className="mb-3" items={[{ label: 'Panel de Control', onClick: onBack }, { label: 'Debates Anteriores' }]} />
-          <div className="mb-8 flex items-center justify-between gap-3">
+          <Breadcrumbs className="mb-4" items={[{ label: 'Panel de Control', onClick: onBack }, { label: 'Debates Anteriores' }]} />
+          <div className="mb-8">
             <h1 className="text-[46px] sm:text-[74px] leading-none text-[#2C2C2C]">Debates Anteriores</h1>
-            <BackLink onClick={onBack} label="Volver" />
           </div>
 
           <div className="mb-6">
@@ -160,9 +160,6 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {sortedDebates.map((debate) => {
-                const status = debate.status === 'completed' ? 'completed' : 'in_progress';
-                const statusDot = status === 'completed' ? '#3A7D44' : '#E6C068';
-
                 return (
                   <div
                     key={debate.code}
@@ -177,12 +174,12 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
                         <p className="truncate text-[16px] text-[#2C2C2C]/55">{debate.debate_topic}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border"
-                          style={{ background: `${statusDot}20`, borderColor: `${statusDot}55`, color: statusDot }}
-                        >
-                          <img src={debate.mode === 'live' ? liveIcon : analysisIcon} alt="" className="h-4 w-4" aria-hidden />
-                        </span>
+                        <img
+                          src={debate.mode === 'live' ? liveIcon : analysisIcon}
+                          alt=""
+                          className="h-7 w-7"
+                          aria-hidden
+                        />
                         <button
                           onClick={() => setShowDeleteConfirm(debate.code)}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2C2C2C]/15 text-[#2C2C2C]/70 hover:opacity-90"

@@ -1,35 +1,36 @@
 /**
- * ScoringScreen - Pantalla de puntuación y evaluación del debate
- * Muestra la rúbrica completa por rondas y permite evaluar ambos equipos
+ * ScoringScreen - Pantalla final de evaluacion.
+ * Mantiene funcionalidad de evaluacion manual y resultados de analisis automatico
+ * con la estetica unificada de la app.
  */
 
-import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  Download, 
-  Trophy, 
-  Loader2, 
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowLeft,
+  Brain,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   Edit3,
-  Save,
+  Loader2,
   Mic,
-  Brain,
-  BarChart3,
-  Users
+  Save,
+  Trophy,
 } from 'lucide-react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateHistoryStore } from '../../store/debateHistoryStore';
-import { 
-  DEBATE_RUBRIC, 
-  DetailedTeamScore, 
+import {
+  DEBATE_RUBRIC,
   DebateScoringResult,
-  TeamPosition,
+  DetailedTeamScore,
+  RubricRoundType,
   SpeakerRoundScore,
-  RubricRoundType
+  TeamPosition,
 } from '../../types';
 import { generateDebatePDF } from '../../utils/pdfGenerator';
+import { BrandHeader } from '../common';
+import { loadDebateTeamColors } from '../../utils/debateColors';
 
 interface ScoringScreenProps {
   onFinish: () => void;
@@ -40,25 +41,40 @@ interface EditableScores {
   [key: string]: { score: number };
 }
 
-const getScoreColor = (score: number) => {
-  if (score >= 4) return 'text-green-400';
-  if (score >= 3) return 'text-[#00E5FF]';
-  if (score >= 2) return 'text-yellow-400';
-  return 'text-[#FF6B00]';
+const getScoreColorClass = (score: number) => {
+  if (score >= 4) return 'text-[#3A7D44]';
+  if (score >= 3) return 'text-[#3A6EA5]';
+  if (score >= 2) return 'text-[#B8872A]';
+  return 'text-[#C44536]';
 };
 
-const getScoreBgColor = (score: number) => {
-  if (score >= 4) return 'bg-green-500/20 border-green-500/30';
-  if (score >= 3) return 'bg-[#00E5FF]/20 border-[#00E5FF]/30';
-  if (score >= 2) return 'bg-yellow-500/20 border-yellow-500/30';
-  return 'bg-[#FF6B00]/20 border-[#FF6B00]/30';
+const getScoreBadgeClass = (score: number) => {
+  if (score >= 4) return 'border-[#3A7D44]/40 bg-[#3A7D44]/12';
+  if (score >= 3) return 'border-[#3A6EA5]/40 bg-[#3A6EA5]/12';
+  if (score >= 2) return 'border-[#B8872A]/40 bg-[#B8872A]/12';
+  return 'border-[#C44536]/40 bg-[#C44536]/12';
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace('#', '');
+  const bigint = parseInt(normalized.length === 3 ? normalized.split('').map((c) => c + c).join('') : normalized, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
 export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }) => {
-  const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis } = useDebateStore();
+  const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis, currentDebateCode } = useDebateStore();
   const { addDebate } = useDebateHistoryStore();
   const analysisResults = getAnalysisResults();
-  
+  const persistedColors = useMemo(
+    () => (currentDebateCode ? loadDebateTeamColors(currentDebateCode) : null),
+    [currentDebateCode]
+  );
+  const teamAColor = persistedColors?.team_a_color || '#3A6EA5';
+  const teamBColor = persistedColors?.team_b_color || '#C44536';
+
   const [scoringResult, setScoringResult] = useState<DebateScoringResult | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -67,35 +83,30 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     introducciones: false,
     refutacion1: false,
     refutacion2: false,
-    conclusiones: false
+    conclusiones: false,
   });
   const [teamNotes, setTeamNotes] = useState({
     bestSpeakerA: '',
     bestSpeakerB: '',
     teamConnectionA: 0,
-    teamConnectionB: 0
+    teamConnectionB: 0,
   });
   const [showAnalysisResults, setShowAnalysisResults] = useState(true);
 
   useEffect(() => {
-    initializeEmptyScoring();
-  }, []);
-
-  const initializeEmptyScoring = () => {
-    const emptyRoundScores = (teamId: TeamPosition, teamName: string): SpeakerRoundScore[] => {
-      return DEBATE_RUBRIC.map(section => ({
+    const emptyRoundScores = (teamId: TeamPosition, teamName: string): SpeakerRoundScore[] =>
+      DEBATE_RUBRIC.map((section) => ({
         speakerId: `${teamId}-${section.roundType}`,
         speakerName: teamName,
         roundType: section.roundType,
-        criterionScores: section.criteria.map(c => ({
-          criterionId: c.id,
+        criterionScores: section.criteria.map((criterion) => ({
+          criterionId: criterion.id,
           score: 0,
-          notes: ''
+          notes: '',
         })),
         totalScore: 0,
-        notes: ''
+        notes: '',
       }));
-    };
 
     const initialResult: DebateScoringResult = {
       debateId: `debate-${Date.now()}`,
@@ -111,7 +122,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
         teamConnectionScore: 0,
         totalScore: 0,
         bestSpeaker: '',
-        overallNotes: ''
+        overallNotes: '',
       },
       teamBScore: {
         teamId: 'B',
@@ -120,61 +131,27 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
         teamConnectionScore: 0,
         totalScore: 0,
         bestSpeaker: '',
-        overallNotes: ''
+        overallNotes: '',
       },
-      duration: recordings.reduce((sum, r) => sum + (r.duration || 0), 0),
+      duration: recordings.reduce((sum, recording) => sum + (recording.duration || 0), 0),
       aiGenerated: false,
-      summary: ''
+      summary: '',
     };
 
-    setScoringResult(initialResult);
-    
     const initialEditable: EditableScores = {};
-    DEBATE_RUBRIC.forEach(section => {
-      section.criteria.forEach(criterion => {
+    DEBATE_RUBRIC.forEach((section) => {
+      section.criteria.forEach((criterion) => {
         initialEditable[`A-${criterion.id}`] = { score: 0 };
         initialEditable[`B-${criterion.id}`] = { score: 0 };
       });
     });
+
     setEditableScores(initialEditable);
-  };
+    setScoringResult(initialResult);
+  }, [config, recordings]);
 
-  const handleScoreChange = (teamId: TeamPosition, criterionId: string, value: number) => {
-    const key = `${teamId}-${criterionId}`;
-    const newScore = Math.min(4, Math.max(0, value));
-    
-    setEditableScores(prev => ({ ...prev, [key]: { score: newScore } }));
-    
-    if (scoringResult) {
-      const teamKey = teamId === 'A' ? 'teamAScore' : 'teamBScore';
-      const updatedTeam = { ...scoringResult[teamKey] };
-      
-      updatedTeam.roundScores = updatedTeam.roundScores.map(round => ({
-        ...round,
-        criterionScores: round.criterionScores.map(c => 
-          c.criterionId === criterionId ? { ...c, score: newScore } : c
-        )
-      }));
-      
-      updatedTeam.totalScore = calculateTeamTotal(updatedTeam.roundScores, updatedTeam.teamConnectionScore);
-      
-      setScoringResult({
-        ...scoringResult,
-        [teamKey]: updatedTeam,
-        winner: determineWinner(
-          teamId === 'A' ? updatedTeam : scoringResult.teamAScore,
-          teamId === 'B' ? updatedTeam : scoringResult.teamBScore
-        )
-      });
-    }
-  };
-
-  const calculateTeamTotal = (roundScores: SpeakerRoundScore[], connectionScore: number): number => {
-    const roundsTotal = roundScores.reduce((sum, round) => 
-      sum + round.criterionScores.reduce((cSum, c) => cSum + c.score, 0), 0
-    );
-    return roundsTotal + connectionScore;
-  };
+  const calculateTeamTotal = (roundScores: SpeakerRoundScore[], connectionScore: number) =>
+    roundScores.reduce((sum, round) => sum + round.criterionScores.reduce((cSum, criterion) => cSum + criterion.score, 0), 0) + connectionScore;
 
   const determineWinner = (teamA: DetailedTeamScore, teamB: DetailedTeamScore): TeamPosition | 'draw' => {
     if (teamA.totalScore > teamB.totalScore) return 'A';
@@ -182,13 +159,62 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     return 'draw';
   };
 
-  const toggleRound = (roundType: RubricRoundType) => {
-    setExpandedRounds(prev => ({ ...prev, [roundType]: !prev[roundType] }));
+  const handleScoreChange = (teamId: TeamPosition, criterionId: string, value: number) => {
+    if (!scoringResult) return;
+    const key = `${teamId}-${criterionId}`;
+    const newScore = Math.min(4, Math.max(0, value));
+
+    setEditableScores((prev) => ({ ...prev, [key]: { score: newScore } }));
+
+    const teamKey = teamId === 'A' ? 'teamAScore' : 'teamBScore';
+    const updatedTeam: DetailedTeamScore = {
+      ...scoringResult[teamKey],
+      roundScores: scoringResult[teamKey].roundScores.map((round) => ({
+        ...round,
+        criterionScores: round.criterionScores.map((criterion) =>
+          criterion.criterionId === criterionId ? { ...criterion, score: newScore } : criterion
+        ),
+      })),
+    };
+    updatedTeam.totalScore = calculateTeamTotal(updatedTeam.roundScores, updatedTeam.teamConnectionScore);
+
+    const nextResult: DebateScoringResult = {
+      ...scoringResult,
+      [teamKey]: updatedTeam,
+      winner: determineWinner(
+        teamId === 'A' ? updatedTeam : scoringResult.teamAScore,
+        teamId === 'B' ? updatedTeam : scoringResult.teamBScore
+      ),
+    };
+
+    setScoringResult(nextResult);
+  };
+
+  const handleConnectionChange = (teamId: TeamPosition, value: number) => {
+    if (!scoringResult) return;
+    const normalized = Math.min(4, Math.max(0, value));
+    const notesKey = teamId === 'A' ? 'teamConnectionA' : 'teamConnectionB';
+    setTeamNotes((prev) => ({ ...prev, [notesKey]: normalized }));
+
+    const teamKey = teamId === 'A' ? 'teamAScore' : 'teamBScore';
+    const updatedTeam: DetailedTeamScore = {
+      ...scoringResult[teamKey],
+      teamConnectionScore: normalized,
+    };
+    updatedTeam.totalScore = calculateTeamTotal(updatedTeam.roundScores, normalized);
+
+    setScoringResult({
+      ...scoringResult,
+      [teamKey]: updatedTeam,
+      winner: determineWinner(
+        teamId === 'A' ? updatedTeam : scoringResult.teamAScore,
+        teamId === 'B' ? updatedTeam : scoringResult.teamBScore
+      ),
+    });
   };
 
   const handleSaveEvaluation = () => {
     if (!scoringResult) return;
-    
     addDebate({
       id: scoringResult.debateId,
       date: scoringResult.date,
@@ -203,7 +229,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
           argumentation: scoringResult.teamAScore.totalScore,
           refutation: scoringResult.teamAScore.totalScore,
           presentation: scoringResult.teamAScore.totalScore,
-          total: scoringResult.teamAScore.totalScore
+          total: scoringResult.teamAScore.totalScore,
         },
         {
           teamId: 'B',
@@ -211,14 +237,19 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
           argumentation: scoringResult.teamBScore.totalScore,
           refutation: scoringResult.teamBScore.totalScore,
           presentation: scoringResult.teamBScore.totalScore,
-          total: scoringResult.teamBScore.totalScore
-        }
+          total: scoringResult.teamBScore.totalScore,
+        },
       ],
       duration: scoringResult.duration,
-      summary: `Ganador: ${scoringResult.winner === 'draw' ? 'Empate' : scoringResult.winner === 'A' ? scoringResult.teamAName : scoringResult.teamBName}`,
-      recordingsCount: recordings.length
+      summary: `Ganador: ${
+        scoringResult.winner === 'draw'
+          ? 'Empate'
+          : scoringResult.winner === 'A'
+          ? scoringResult.teamAName
+          : scoringResult.teamBName
+      }`,
+      recordingsCount: recordings.length,
     });
-    
     onFinish();
   };
 
@@ -232,371 +263,321 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     }
   };
 
+  const toggleRound = (roundType: RubricRoundType) => {
+    setExpandedRounds((prev) => ({ ...prev, [roundType]: !prev[roundType] }));
+  };
+
   if (!scoringResult) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center pb-32">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00E5FF]"></div>
+      <div className="app-shell flex min-h-screen items-center justify-center pb-32">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#2C2C2C]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-y-auto pb-32">
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left: Back button */}
+    <div className="app-shell min-h-screen overflow-y-auto pb-32">
+      <div className="mx-auto w-full max-w-[1240px] px-5 py-8 sm:px-8">
+        <BrandHeader className="mb-6" />
+
+        <div className="mb-6 rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-3 sm:px-6">
+          <div className="flex items-center justify-between">
             <div className="w-32">
-              <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white/90 rounded-lg hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)]">
-                <ArrowLeft className="w-5 h-5" />
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 rounded-xl border border-[#1C1D1F] bg-[#F5F5F3] px-4 py-2 text-[#2C2C2C] transition-opacity hover:opacity-80"
+              >
+                <ArrowLeft className="h-5 w-5" />
                 <span>Volver</span>
               </button>
             </div>
-
-            {/* Center: Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10">
-                <img src="/logo.svg" alt="CiceronAI" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-xl font-bold text-white">CiceronAI</span>
-            </div>
-
-            {/* Right: Edit button */}
+            <h1 className="text-center text-[34px] leading-none text-[#2C2C2C] sm:text-[42px]">Evaluacion Final</h1>
             <div className="w-32 flex justify-end">
               <button
-                onClick={() => setIsEditing(!isEditing)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isEditing ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)]'
+                onClick={() => setIsEditing((prev) => !prev)}
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-[#2C2C2C] ${
+                  isEditing ? 'border-[#3A7D44] bg-[#3A7D44]/20' : 'border-[#1C1D1F] bg-[#F5F5F3]'
                 }`}
               >
-                {isEditing ? <><Save className="w-4 h-4" /><span className="hidden sm:inline">Guardar</span></> : <><Edit3 className="w-4 h-4" /><span className="hidden sm:inline">Editar</span></>}
+                {isEditing ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+                <span className="hidden sm:inline">{isEditing ? 'Guardar' : 'Editar'}</span>
               </button>
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-32">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">{scoringResult.topic}</h1>
-            
-            {/* Toggle entre resultados manuales y análisis automático */}
-            {analysisResults.length > 0 && (
-              <div className="flex justify-center gap-2 mb-6">
-                <button
-                  onClick={() => setShowAnalysisResults(true)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    showAnalysisResults 
-                      ? 'bg-gradient-to-r from-purple-600/30 to-blue-600/30 text-white border border-purple-500/50' 
-                      : 'bg-slate-800/50 text-slate-400 border border-slate-700'
-                  }`}
+        <section className="mb-6 rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-5 py-6">
+          <h2 className="mb-4 text-center text-[30px] leading-none text-[#2C2C2C] sm:text-[36px]">{scoringResult.topic}</h2>
+
+          {analysisResults.length > 0 && (
+            <div className="mb-5 flex justify-center gap-2">
+              <button
+                onClick={() => setShowAnalysisResults(true)}
+                className={`rounded-xl border px-4 py-2 ${showAnalysisResults ? 'border-[#1C1D1F] bg-[#F5F5F3] text-[#2C2C2C]' : 'border-[#CFCFCD] bg-white text-[#6A6A6A]'}`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Brain className="h-4 w-4" />
+                  Analisis Automatico ({analysisResults.length})
+                </span>
+              </button>
+              <button
+                onClick={() => setShowAnalysisResults(false)}
+                className={`rounded-xl border px-4 py-2 ${!showAnalysisResults ? 'border-[#1C1D1F] bg-[#F5F5F3] text-[#2C2C2C]' : 'border-[#CFCFCD] bg-white text-[#6A6A6A]'}`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Edit3 className="h-4 w-4" />
+                  Evaluacion Manual
+                </span>
+              </button>
+            </div>
+          )}
+
+          {showAnalysisResults && analysisResults.length > 0 ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div
+                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromAnalysis('A') <= getTeamScoreFromAnalysis('B') ? 'border-[#CFCFCD] bg-white' : ''}`}
+                  style={
+                    getTeamScoreFromAnalysis('A') > getTeamScoreFromAnalysis('B')
+                      ? { borderColor: hexToRgba(teamAColor, 0.6), background: hexToRgba(teamAColor, 0.12) }
+                      : undefined
+                  }
                 >
-                  <Brain className="w-4 h-4" />
-                  <span>Análisis Automático ({analysisResults.length})</span>
-                </button>
-                <button
-                  onClick={() => setShowAnalysisResults(false)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    !showAnalysisResults 
-                      ? 'bg-gradient-to-r from-[#FF6B00]/30 to-[#00E5FF]/30 text-white border border-white/30' 
-                      : 'bg-slate-800/50 text-slate-400 border border-slate-700'
-                  }`}
+                  <p className="text-sm font-medium" style={{ color: teamAColor }}>{scoringResult.teamAName}</p>
+                  <p className="text-3xl font-bold text-[#2C2C2C]">{getTeamScoreFromAnalysis('A')}</p>
+                </div>
+                <div
+                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromAnalysis('B') <= getTeamScoreFromAnalysis('A') ? 'border-[#CFCFCD] bg-white' : ''}`}
+                  style={
+                    getTeamScoreFromAnalysis('B') > getTeamScoreFromAnalysis('A')
+                      ? { borderColor: hexToRgba(teamBColor, 0.7), background: hexToRgba(teamBColor, 0.12) }
+                      : undefined
+                  }
                 >
-                  <Edit3 className="w-4 h-4" />
-                  <span>Evaluación Manual</span>
-                </button>
+                  <p className="text-sm font-medium" style={{ color: teamBColor }}>{scoringResult.teamBName}</p>
+                  <p className="text-3xl font-bold text-[#2C2C2C]">{getTeamScoreFromAnalysis('B')}</p>
+                </div>
               </div>
-            )}
-            
-            {/* Puntuaciones del Análisis Automático */}
-            {showAnalysisResults && analysisResults.length > 0 ? (
-              <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30 rounded-2xl p-6 mb-6">
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <Brain className="w-6 h-6 text-purple-400" />
-                  <h2 className="text-xl font-bold text-white">Resultados del Análisis Automático</h2>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto mb-6">
-                  <div className={`p-4 rounded-xl border-2 ${
-                    getTeamScoreFromAnalysis('A') > getTeamScoreFromAnalysis('B') 
-                      ? 'border-[#FF6B00]/50 bg-[#FF6B00]/10' 
-                      : 'border-slate-700'
-                  }`}>
-                    <p className="text-[#FF6B00] text-sm font-medium mb-1">{scoringResult.teamAName}</p>
-                    <p className="text-3xl font-bold text-white">{getTeamScoreFromAnalysis('A')}</p>
-                    <p className="text-slate-400 text-xs mt-1">Basado en {analysisResults.filter(r => r.postura === 'A Favor').length} intervenciones</p>
-                  </div>
-                  
-                  <div className={`p-4 rounded-xl border-2 ${
-                    getTeamScoreFromAnalysis('B') > getTeamScoreFromAnalysis('A') 
-                      ? 'border-[#00E5FF]/50 bg-[#00E5FF]/10' 
-                      : 'border-slate-700'
-                  }`}>
-                    <p className="text-[#00E5FF] text-sm font-medium mb-1">{scoringResult.teamBName}</p>
-                    <p className="text-3xl font-bold text-white">{getTeamScoreFromAnalysis('B')}</p>
-                    <p className="text-slate-400 text-xs mt-1">Basado en {analysisResults.filter(r => r.postura === 'En Contra').length} intervenciones</p>
-                  </div>
-                </div>
-                
-                {/* Lista detallada de resultados */}
-                <div className="space-y-3">
-                  {analysisResults.map((result, index) => (
-                    <div 
-                      key={index} 
-                      className={`p-4 rounded-xl border ${
-                        result.postura === 'A Favor' 
-                          ? 'bg-[#FF6B00]/5 border-[#FF6B00]/20' 
-                          : 'bg-[#00E5FF]/5 border-[#00E5FF]/20'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-semibold ${
-                            result.postura === 'A Favor' ? 'text-[#FF6B00]' : 'text-[#00E5FF]'
-                          }`}>
-                            {result.postura === 'A Favor' ? scoringResult.teamAName : scoringResult.teamBName}
-                          </span>
-                          <span className="text-slate-400">•</span>
-                          <span className="text-slate-300 text-sm capitalize">{result.fase}</span>
-                        </div>                        
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl font-bold text-white">{result.total}</span>
-                          <span className="text-slate-400 text-sm">/ {result.max_total}</span>
-                        </div>
-                      </div>
-                      
-                      {/* Criterios */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        {result.criterios.map((criterio, cIndex) => (
-                          <div key={cIndex} className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1">
-                            <span className="text-slate-400 truncate mr-2">{criterio.criterio}</span>
-                            <span className={`font-medium ${
-                              criterio.nota >= 4 ? 'text-green-400' : 
-                              criterio.nota >= 3 ? 'text-[#00E5FF]' : 
-                              criterio.nota >= 2 ? 'text-yellow-400' : 'text-[#FF6B00]'
-                            }`}>
-                              {criterio.nota}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+
+              {analysisResults.map((result, index) => (
+                <div key={`analysis-${index}`} className="rounded-xl border border-[#CFCFCD] bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-sm text-[#5E5E5E]">
+                      <span className="font-semibold" style={{ color: result.postura === 'A Favor' ? teamAColor : teamBColor }}>
+                        {result.postura === 'A Favor' ? scoringResult.teamAName : scoringResult.teamBName}
+                      </span>{' '}
+                      • {result.fase}
                     </div>
-                  ))}
+                    <div className="text-sm text-[#5E5E5E]">
+                      <span className="text-xl font-bold text-[#2C2C2C]">{result.total}</span> / {result.max_total}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {result.criterios.map((criterion, cIndex) => (
+                      <div key={`criterion-${index}-${cIndex}`} className="flex items-center justify-between rounded bg-[#F5F5F3] px-2 py-1 text-sm">
+                        <span className="mr-2 truncate text-[#5E5E5E]">{criterion.criterio}</span>
+                        <span className={getScoreColorClass(criterion.nota)}>{criterion.nota}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className={`rounded-xl border-2 p-4 ${scoringResult.winner !== 'A' ? 'border-[#CFCFCD] bg-white' : ''}`}
+                style={
+                  scoringResult.winner === 'A'
+                    ? { borderColor: hexToRgba(teamAColor, 0.6), background: hexToRgba(teamAColor, 0.12) }
+                    : undefined
+                }
+              >
+                <p className="text-sm font-medium" style={{ color: teamAColor }}>{scoringResult.teamAName}</p>
+                <p className="text-3xl font-bold text-[#2C2C2C]">{scoringResult.teamAScore.totalScore}</p>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
-                  <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'A' ? 'border-[#FF6B00]/50 bg-[#FF6B00]/10' : 'border-slate-700'}`}>
-                    <p className="text-[#FF6B00] text-sm font-medium mb-1">{scoringResult.teamAName}</p>
-                    <p className="text-3xl font-bold text-white">{scoringResult.teamAScore.totalScore}</p>
-                  </div>
-                  
-                  <div className={`p-4 rounded-xl border-2 ${scoringResult.winner === 'B' ? 'border-[#00E5FF]/50 bg-[#00E5FF]/10' : 'border-slate-700'}`}>
-                    <p className="text-[#00E5FF] text-sm font-medium mb-1">{scoringResult.teamBName}</p>
-                    <p className="text-3xl font-bold text-white">{scoringResult.teamBScore.totalScore}</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+              <div
+                className={`rounded-xl border-2 p-4 ${scoringResult.winner !== 'B' ? 'border-[#CFCFCD] bg-white' : ''}`}
+                style={
+                  scoringResult.winner === 'B'
+                    ? { borderColor: hexToRgba(teamBColor, 0.7), background: hexToRgba(teamBColor, 0.12) }
+                    : undefined
+                }
+              >
+                <p className="text-sm font-medium" style={{ color: teamBColor }}>{scoringResult.teamBName}</p>
+                <p className="text-3xl font-bold text-[#2C2C2C]">{scoringResult.teamBScore.totalScore}</p>
+              </div>
+            </div>
+          )}
+        </section>
 
-          {/* Sección de Rúbrica Manual - Solo mostrar si no estamos viendo resultados automáticos */}
-          {(!showAnalysisResults || analysisResults.length === 0) && (
-          <div className="space-y-4">
+        {(!showAnalysisResults || analysisResults.length === 0) && (
+          <section className="mb-6 space-y-4">
             {DEBATE_RUBRIC.map((section) => (
-              <div key={section.roundType} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
+              <div key={section.roundType} className="overflow-hidden rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9]">
                 <button
                   onClick={() => toggleRound(section.roundType)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
+                  className="flex w-full items-center justify-between p-4 transition-colors hover:bg-[#F5F5F3]"
                 >
                   <div className="flex items-center gap-3">
-                    <Mic className="w-5 h-5 text-slate-400" />
-                    <span className="text-white font-semibold">{section.roundName}</span>
+                    <Mic className="h-5 w-5 text-[#5E5E5E]" />
+                    <span className="font-semibold text-[#2C2C2C]">{section.roundName}</span>
                   </div>
-                  {expandedRounds[section.roundType] ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                  {expandedRounds[section.roundType] ? <ChevronUp className="h-5 w-5 text-[#5E5E5E]" /> : <ChevronDown className="h-5 w-5 text-[#5E5E5E]" />}
                 </button>
 
                 {expandedRounds[section.roundType] && (
-                  <div className="border-t border-slate-700">
-                    <div className="p-4">
-                      {/* Headers de equipos */}
-                      <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="text-center">
-                          <span className="text-[#FF6B00] font-semibold">{scoringResult.teamAName}</span>
-                          <span className="text-slate-500 ml-2">(A Favor)</span>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-slate-400 text-sm">Rúbrica</span>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-[#00E5FF] font-semibold">{scoringResult.teamBName}</span>
-                          <span className="text-slate-500 ml-2">(En Contra)</span>
-                        </div>
+                  <div className="border-t border-[#CFCFCD] p-4">
+                    <div className="mb-4 grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <span className="font-semibold" style={{ color: teamAColor }}>{scoringResult.teamAName}</span>
                       </div>
-                      
-                      {/* Criterios con puntuaciones a los lados */}
-                      <div className="space-y-3">
-                        {section.criteria.map((criterion) => {
-                          const keyA = `A-${criterion.id}`;
-                          const keyB = `B-${criterion.id}`;
-                          const scoreA = editableScores[keyA]?.score || 0;
-                          const scoreB = editableScores[keyB]?.score || 0;
-                          
-                          return (
-                            <div key={criterion.id} className="grid grid-cols-3 gap-4 items-center bg-slate-900/50 rounded-lg p-3">
-                              {/* Puntuación Equipo A */}
-                              <div className="flex justify-center">
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="4"
-                                      value={scoreA}
-                                      onChange={(e) => handleScoreChange('A', criterion.id, parseInt(e.target.value) || 0)}
-                                      className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-center"
-                                    />
-                                    <span className="text-slate-500 text-sm">/ {criterion.maxScore}</span>
-                                  </div>
-                                ) : (
-                                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${getScoreBgColor(scoreA)}`}>
-                                    <span className={`font-bold ${getScoreColor(scoreA)}`}>{scoreA}</span>
-                                    <span className="text-slate-400 text-sm">/ {criterion.maxScore}</span>
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* Descripción de la rúbrica (centro) */}
-                              <div className="text-center">
-                                <p className="text-slate-300 text-sm">{criterion.description}</p>
-                              </div>
-                              
-                              {/* Puntuación Equipo B */}
-                              <div className="flex justify-center">
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="4"
-                                      value={scoreB}
-                                      onChange={(e) => handleScoreChange('B', criterion.id, parseInt(e.target.value) || 0)}
-                                      className="w-16 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-white text-center"
-                                    />
-                                    <span className="text-slate-500 text-sm">/ {criterion.maxScore}</span>
-                                  </div>
-                                ) : (
-                                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${getScoreBgColor(scoreB)}`}>
-                                    <span className={`font-bold ${getScoreColor(scoreB)}`}>{scoreB}</span>
-                                    <span className="text-slate-400 text-sm">/ {criterion.maxScore}</span>
-                                  </div>
-                                )}
-                              </div>
+                      <div className="text-center text-sm text-[#8A8A8A]">Rubrica</div>
+                      <div className="text-center">
+                        <span className="font-semibold" style={{ color: teamBColor }}>{scoringResult.teamBName}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {section.criteria.map((criterion) => {
+                        const keyA = `A-${criterion.id}`;
+                        const keyB = `B-${criterion.id}`;
+                        const scoreA = editableScores[keyA]?.score || 0;
+                        const scoreB = editableScores[keyB]?.score || 0;
+                        return (
+                          <div key={criterion.id} className="grid grid-cols-3 items-center gap-4 rounded-lg bg-[#F5F5F3] p-3">
+                            <div className="flex justify-center">
+                              {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={4}
+                                    value={scoreA}
+                                    onChange={(e) => handleScoreChange('A', criterion.id, parseInt(e.target.value, 10) || 0)}
+                                    className="w-16 rounded border border-[#CFCFCD] bg-white px-2 py-1 text-center text-[#2C2C2C]"
+                                  />
+                                  <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
+                                </div>
+                              ) : (
+                                <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(scoreA)}`}>
+                                  <span className={`font-bold ${getScoreColorClass(scoreA)}`}>{scoreA}</span>
+                                  <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
+                                </div>
+                              )}
                             </div>
-                          );
-                        })}
-                      </div>
+
+                            <div className="text-center text-sm text-[#5E5E5E]">{criterion.description}</div>
+
+                            <div className="flex justify-center">
+                              {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={4}
+                                    value={scoreB}
+                                    onChange={(e) => handleScoreChange('B', criterion.id, parseInt(e.target.value, 10) || 0)}
+                                    className="w-16 rounded border border-[#CFCFCD] bg-white px-2 py-1 text-center text-[#2C2C2C]"
+                                  />
+                                  <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
+                                </div>
+                              ) : (
+                                <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(scoreB)}`}>
+                                  <span className={`font-bold ${getScoreColorClass(scoreB)}`}>{scoreB}</span>
+                                  <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             ))}
-          </div>
-          )}
+          </section>
+        )}
 
-          <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Trophy className="w-6 h-6 text-yellow-400" />
-              Sumatorio y Evaluación Global
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                { team: 'A', name: scoringResult.teamAName, color: 'text-[#FF6B00]', connection: teamNotes.teamConnectionA, bestSpeaker: teamNotes.bestSpeakerA },
-                { team: 'B', name: scoringResult.teamBName, color: 'text-[#00E5FF]', connection: teamNotes.teamConnectionB, bestSpeaker: teamNotes.bestSpeakerB }
-              ].map(({ team, name, color, connection, bestSpeaker }) => (
-                <div key={team} className="space-y-4">
-                  <h3 className={`${color} font-semibold`}>{name}</h3>
-                  
-                  <div>
-                    <label className="block text-slate-400 text-sm mb-2">Conexión entre miembros (0-4)</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
-                        value={connection}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value) || 0;
-                          setTeamNotes(prev => ({ ...prev, [`teamConnection${team}`]: value }));
-                          if (scoringResult) {
-                            const teamKey = team === 'A' ? 'teamAScore' : 'teamBScore';
-                            const updatedTeam = { ...scoringResult[teamKey], teamConnectionScore: value };
-                            updatedTeam.totalScore = calculateTeamTotal(updatedTeam.roundScores, value);
-                            setScoringResult({
-                              ...scoringResult,
-                              [teamKey]: updatedTeam,
-                              winner: determineWinner(
-                                team === 'A' ? updatedTeam : scoringResult.teamAScore,
-                                team === 'B' ? updatedTeam : scoringResult.teamBScore
-                              )
-                            });
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                      />
-                    ) : (
-                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${getScoreBgColor(connection)}`}>
-                        <span className={`font-bold ${getScoreColor(connection)}`}>{connection}</span>
-                        <span className="text-slate-400">/ 4</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-slate-400 text-sm mb-2">Mejor Orador</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={bestSpeaker}
-                        onChange={(e) => setTeamNotes(prev => ({ ...prev, [`bestSpeaker${team}`]: e.target.value }))}
-                        placeholder="Nombre del mejor orador"
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
-                      />
-                    ) : (
-                      <p className="text-white">{bestSpeaker || 'No especificado'}</p>
-                    )}
-                  </div>
+        <section className="mb-6 rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-[#2C2C2C]">
+            <Trophy className="h-6 w-6 text-[#B8872A]" />
+            Sumatorio y Evaluacion Global
+          </h3>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {[
+              { team: 'A' as TeamPosition, name: scoringResult.teamAName, color: teamAColor, connection: teamNotes.teamConnectionA, bestSpeaker: teamNotes.bestSpeakerA },
+              { team: 'B' as TeamPosition, name: scoringResult.teamBName, color: teamBColor, connection: teamNotes.teamConnectionB, bestSpeaker: teamNotes.bestSpeakerB },
+            ].map(({ team, name, color, connection, bestSpeaker }) => (
+              <div key={`summary-${team}`} className="space-y-3 rounded-xl border border-[#CFCFCD] bg-white p-4">
+                <h4 className="font-semibold" style={{ color }}>{name}</h4>
+                <div>
+                  <label className="mb-2 block text-sm text-[#5E5E5E]">Conexion entre miembros (0-4)</label>
+                  {isEditing ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={4}
+                      value={connection}
+                      onChange={(e) => handleConnectionChange(team, parseInt(e.target.value, 10) || 0)}
+                      className="w-full rounded-lg border border-[#CFCFCD] bg-white px-3 py-2 text-[#2C2C2C]"
+                    />
+                  ) : (
+                    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(connection)}`}>
+                      <span className={getScoreColorClass(connection)}>{connection}</span>
+                      <span className="text-[#8A8A8A]">/4</span>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+                <div>
+                  <label className="mb-2 block text-sm text-[#5E5E5E]">Mejor orador</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={bestSpeaker}
+                      onChange={(e) =>
+                        setTeamNotes((prev) => ({
+                          ...prev,
+                          [team === 'A' ? 'bestSpeakerA' : 'bestSpeakerB']: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-lg border border-[#CFCFCD] bg-white px-3 py-2 text-[#2C2C2C]"
+                      placeholder="Nombre del mejor orador"
+                    />
+                  ) : (
+                    <p className="text-[#2C2C2C]">{bestSpeaker || 'No especificado'}</p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
+        </section>
 
-          {/* Botones de acción - debajo de Sumatorio y Evaluación Global */}
-          <div className="mt-6 mb-32 bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={handleDownloadPDF}
-                disabled={isGeneratingPDF}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-[#1F2A33]/80 to-[#1F2A33]/40 text-white rounded-xl font-semibold hover:from-[#1F2A33]/90 hover:to-[#1F2A33]/50 transition-all border border-white/20 shadow-[0_8px_32px_rgba(31,42,51,0.4)] disabled:opacity-50"
-              >
-                {isGeneratingPDF ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                <span>Descargar PDF</span>
-              </button>
-              
-              <button
-                onClick={handleSaveEvaluation}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-br from-green-600/20 to-green-600/10 text-green-400 rounded-xl font-semibold hover:from-green-600/30 hover:to-green-600/20 transition-all border border-green-500/30 shadow-[0_8px_32px_rgba(34,197,94,0.2)]"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                <span>Guardar Evaluación</span>
-              </button>
-            </div>
+        <section className="mb-32 rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-6">
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1C1D1F] bg-[#F5F5F3] px-6 py-3 font-semibold text-[#2C2C2C] transition-opacity hover:opacity-80 disabled:opacity-50 sm:flex-none"
+            >
+              {isGeneratingPDF ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+              <span>Descargar PDF</span>
+            </button>
+
+            <button
+              onClick={handleSaveEvaluation}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#3A7D44] bg-[#3A7D44] px-6 py-3 font-semibold text-[#F5F5F3] transition-opacity hover:opacity-90"
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Guardar Evaluacion</span>
+            </button>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 };
+
+export default ScoringScreen;

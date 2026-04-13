@@ -33,8 +33,10 @@ import { DebateHistory, Project, Debate, DebateMode } from './types';
 import { Dock } from './components/common';
 import { AlertTriangle } from 'lucide-react';
 import { loadLiveDebateSession } from './utils/debatePersistence';
+import { clearAnalysisDraft, saveAnalysisDraft } from './utils/debatePersistence';
 import { loadDebateTeamColors } from './utils/debateColors';
 import { initThemeSync } from './utils/theme';
+import { debatesService } from './api';
 import backIcon from './assets/icons/icon-back.svg';
 import leftIcon from './assets/icons/icon-left.svg';
 import dashboardIcon from './assets/icons/icon-dashboard.svg';
@@ -66,7 +68,7 @@ type AppScreen =
 function App() {
   const { checkAuth, isAuthenticated } = useAuthStore();
   const { selectedDebate, selectDebate } = useDebateHistoryStore();
-  const { clearUploads } = useAnalysisStore();
+  const { clearUploads, uploads } = useAnalysisStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
@@ -74,6 +76,7 @@ function App() {
   const [publicDashboardToken, setPublicDashboardToken] = useState<string | null>(null);
   const [isAppEntryTransitionActive, setIsAppEntryTransitionActive] = useState(false);
   const [competitionDashboardView, setCompetitionDashboardView] = useState(false);
+  const [analysisDashboardView, setAnalysisDashboardView] = useState(false);
   
   // NUEVO: Estados para el sistema simplificado de debates
   const {
@@ -143,6 +146,12 @@ function App() {
       setCompetitionDashboardView(false);
     }
   }, [currentScreen, competitionDashboardView]);
+
+  useEffect(() => {
+    if (currentScreen !== 'analysis' && analysisDashboardView) {
+      setAnalysisDashboardView(false);
+    }
+  }, [currentScreen, analysisDashboardView]);
 
   // Navegación básica
   const handleGoToLanding = () => navigateTo('landing', 'replace');
@@ -283,6 +292,84 @@ function App() {
     navigateTo('dashboard', 'replace');
   };
 
+  const getCurrentAnalysisDebateCode = () =>
+    selectedUnifiedDebate?.code || selectedAnalysisProject?.code || '';
+
+  const ANALYSIS_SAVED_KEY_PREFIX = 'ciceronia.analysisSavedOnce.';
+  const markAnalysisSavedOnce = (debateCode: string) => {
+    if (!debateCode || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(`${ANALYSIS_SAVED_KEY_PREFIX}${debateCode}`, '1');
+    } catch {
+      // ignore
+    }
+  };
+  const hasAnalysisSavedOnce = (debateCode: string) => {
+    if (!debateCode || typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(`${ANALYSIS_SAVED_KEY_PREFIX}${debateCode}`) === '1';
+    } catch {
+      return false;
+    }
+  };
+
+  const hasAnalysisActivity = () =>
+    uploads.some(
+      (upload) =>
+        !!upload.file ||
+        !!upload.persistedFileName ||
+        !!upload.result ||
+        upload.status !== 'pending'
+    );
+
+  const [showAnalysisExitChoice, setShowAnalysisExitChoice] = useState(false);
+  const [isDeletingAnalysisDebate, setIsDeletingAnalysisDebate] = useState(false);
+  const [analysisExitAllowDelete, setAnalysisExitAllowDelete] = useState(true);
+
+  const exitAnalysisWithSave = () => {
+    const debateCode = getCurrentAnalysisDebateCode();
+    if (debateCode) {
+      markAnalysisSavedOnce(debateCode);
+    }
+    if (debateCode && hasAnalysisActivity()) {
+      saveAnalysisDraft(debateCode, uploads);
+    }
+    clearUploads();
+    setShowAnalysisExitChoice(false);
+    navigateTo('dashboard', 'replace');
+  };
+
+  const exitAnalysisWithDelete = async () => {
+    const debateCode = getCurrentAnalysisDebateCode();
+    setIsDeletingAnalysisDebate(true);
+    try {
+      if (debateCode) {
+        await debatesService.deleteDebate(debateCode);
+        clearAnalysisDraft(debateCode);
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(`${ANALYSIS_SAVED_KEY_PREFIX}${debateCode}`);
+        }
+      }
+      clearUploads();
+      setShowAnalysisExitChoice(false);
+      navigateTo('dashboard', 'replace');
+    } catch (error) {
+      console.error('No se pudo eliminar el debate de analisis', error);
+    } finally {
+      setIsDeletingAnalysisDebate(false);
+    }
+  };
+
+  const handleAnalysisBack = () => {
+    const debateCode = getCurrentAnalysisDebateCode();
+    if (hasAnalysisActivity()) {
+      exitAnalysisWithSave();
+      return;
+    }
+    setAnalysisExitAllowDelete(!hasAnalysisSavedOnce(debateCode));
+    setShowAnalysisExitChoice(true);
+  };
+
   // Flujo legacy
   const runAppEntryTransition = (navigate: () => void) => {
     setIsAppEntryTransitionActive(true);
@@ -391,16 +478,21 @@ function App() {
         onClick: () =>
           currentScreen === 'competition'
             ? handleNavigationWithConfirm(() => navigateTo('dashboard', 'replace'))
+            : currentScreen === 'analysis'
+              ? handleAnalysisBack()
             : handleNavigationWithConfirm(goBack),
       });
     }
 
-    if (currentScreen === 'competition') {
+    if (currentScreen === 'competition' || currentScreen === 'analysis') {
       items.push({
         icon: <img src={dashboardIcon} alt="" className={iconClass} aria-hidden />,
         label: 'Dashboard',
-        active: competitionDashboardView,
-        onClick: () => setCompetitionDashboardView((prev) => !prev),
+        active: currentScreen === 'competition' ? competitionDashboardView : analysisDashboardView,
+        onClick: () =>
+          currentScreen === 'competition'
+            ? setCompetitionDashboardView((prev) => !prev)
+            : setAnalysisDashboardView((prev) => !prev),
       });
     }
 
@@ -489,8 +581,6 @@ function App() {
             onSelectDebate={handleSelectDebateFromList}
             onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
-            onNewLiveDebate={handleNewLiveDebate}
-            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -498,23 +588,25 @@ function App() {
         return selectedUnifiedDebate ? (
           <AnalysisScreen
             debate={selectedUnifiedDebate}
-            onBack={() => navigateTo('debates', 'replace')}
+            onBack={handleAnalysisBack}
             onViewResults={handleViewResults}
+            dashboardView={analysisDashboardView}
+            onDashboardViewChange={setAnalysisDashboardView}
           />
         ) : selectedAnalysisProject ? (
           // LEGACY: Soporte para proyectos antiguos
           <AnalysisScreen
             project={selectedAnalysisProject}
-            onBack={() => navigateTo('debates', 'replace')}
+            onBack={handleAnalysisBack}
             onViewResults={handleViewResults}
+            dashboardView={analysisDashboardView}
+            onDashboardViewChange={setAnalysisDashboardView}
           />
         ) : (
           <DebatesScreen
             onSelectDebate={handleSelectDebateFromList}
             onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
-            onNewLiveDebate={handleNewLiveDebate}
-            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -525,8 +617,6 @@ function App() {
             onSelectDebate={handleSelectDebateFromList}
             onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
-            onNewLiveDebate={handleNewLiveDebate}
-            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -558,8 +648,6 @@ function App() {
             onSelectDebate={handleSelectDebateFromList}
             onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
-            onNewLiveDebate={handleNewLiveDebate}
-            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -605,8 +693,6 @@ function App() {
             onSelectDebate={handleSelectDebateFromList}
             onViewDebateDetails={handleViewDebateDetails}
             onBack={handleGoToDashboard}
-            onNewLiveDebate={handleNewLiveDebate}
-            onNewAnalysis={handleNewAnalysisDebate}
           />
         );
 
@@ -697,6 +783,45 @@ function App() {
                   Pausar y salir
                 </button>
               </div>
+          </div>
+        </div>
+      )}
+
+      {showAnalysisExitChoice && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAnalysisExitChoice(false)} />
+          <div className="relative w-full max-w-md rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#F0F0EE] p-6">
+            <h3 className="mb-3 text-[30px] leading-none text-[#2C2C2C]">Salir del analisis</h3>
+            <p className="mb-5 text-[20px] text-[#2C2C2C]/75">
+              {analysisExitAllowDelete
+                ? 'Este debate aun no tiene audios. Puedes guardarlo como borrador o eliminarlo.'
+                : 'Este debate ya fue guardado antes. Puedes salir o cancelar.'}
+            </p>
+            <div className="grid gap-3">
+              <button
+                onClick={exitAnalysisWithSave}
+                className="w-full rounded-[12px] border-0 bg-[#3A7D44] px-4 py-3 text-[20px] text-white"
+                disabled={isDeletingAnalysisDebate}
+              >
+                {analysisExitAllowDelete ? 'Salir y guardar' : 'Salir'}
+              </button>
+              {analysisExitAllowDelete && (
+                <button
+                  onClick={exitAnalysisWithDelete}
+                  className="w-full rounded-[12px] border-0 bg-[#C44536] px-4 py-3 text-[20px] text-white"
+                  disabled={isDeletingAnalysisDebate}
+                >
+                  {isDeletingAnalysisDebate ? 'Eliminando...' : 'Salir y eliminar'}
+                </button>
+              )}
+              <button
+                onClick={() => setShowAnalysisExitChoice(false)}
+                className="w-full rounded-[12px] border border-[#2C2C2C]/20 bg-[#ECECE9] px-4 py-3 text-[20px] text-[#2C2C2C]"
+                disabled={isDeletingAnalysisDebate}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

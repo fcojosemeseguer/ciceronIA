@@ -8,6 +8,8 @@
 
 import apiClient from './client';
 import { Debate, CreateDebateData, AnalysisResult, GetProjectRequestOptions, ProjectDashboardResponse, DebateMode, DebateStatus } from '../types';
+import { loadDebateMetadata, saveDebateMetadata } from '../utils/debateMetadata';
+import { loadLiveDebateSession } from '../utils/debatePersistence';
 
 interface BackendDebate extends Omit<Debate, 'description' | 'mode' | 'status'> {
   description?: string;
@@ -52,21 +54,50 @@ interface CreateDebateResponse {
   user_code?: string;
 }
 
+const resolveDebateMode = (rawMode?: string, persistedMode?: DebateMode, debateCode?: string): DebateMode => {
+  if (rawMode) {
+    const normalized = rawMode.trim().toLowerCase();
+    if (normalized === 'live' || normalized.includes('vivo')) return 'live';
+    if (normalized === 'analysis' || normalized.includes('anal') || normalized.includes('audio') || normalized.includes('record')) return 'analysis';
+  }
+  if (debateCode && loadLiveDebateSession(debateCode)) {
+    return 'live';
+  }
+  return persistedMode || 'analysis';
+};
+
 // Helper para normalizar backend response a tipo Debate
 const normalizeDebate = (backendDebate: BackendDebate): Debate => {
   const createdAtRaw = backendDebate.created_at;
   const createdAtTime = createdAtRaw ? new Date(createdAtRaw).getTime() : NaN;
+  const debateCode = backendDebate.code || backendDebate.project_code || '';
+  const persistedMetadata = loadDebateMetadata(debateCode);
+  const normalizedMode = resolveDebateMode(backendDebate.mode, persistedMetadata?.mode, debateCode);
+  const normalizedCreatedTs = Number.isFinite(createdAtTime)
+    ? createdAtTime
+    : persistedMetadata?.created_ts || Date.now();
+  const normalizedCreatedAt = Number.isFinite(createdAtTime)
+    ? new Date(createdAtTime).toISOString()
+    : new Date(normalizedCreatedTs).toISOString();
+
+  if (debateCode) {
+    saveDebateMetadata(debateCode, {
+      mode: normalizedMode,
+      created_ts: normalizedCreatedTs,
+    });
+  }
 
   return {
     ...backendDebate,
-    code: backendDebate.code || backendDebate.project_code || '',
+    code: debateCode,
     description: backendDebate.description || backendDebate.desc || '',
     debate_topic: backendDebate.debate_topic || backendDebate.name || '',
     team_a_name: backendDebate.team_a_name || 'A favor',
     team_b_name: backendDebate.team_b_name || 'En contra',
-    mode: (backendDebate.mode as DebateMode) || 'analysis',
+    mode: normalizedMode as DebateMode,
     status: (backendDebate.status as DebateStatus) || 'draft',
-    created_at: Number.isFinite(createdAtTime) ? new Date(createdAtTime).toISOString() : new Date().toISOString(),
+    created_at: normalizedCreatedAt,
+    created_ts: normalizedCreatedTs,
   };
 };
 
@@ -128,6 +159,8 @@ export const debatesService = {
    * Crear un nuevo debate
    */
   async createDebate(data: CreateDebateData): Promise<Debate> {
+    const createdTs = Date.now();
+    const createdAtISO = new Date(createdTs).toISOString();
     const response = await apiClient.post<CreateDebateResponse>('/new-project', {
       name: data.name,
       description: data.description,
@@ -137,7 +170,7 @@ export const debatesService = {
       debate_topic: data.debate_topic,
       mode: data.mode,
     });
-    return normalizeDebate({
+    const createdDebate = normalizeDebate({
       code: response.data.debate_code || response.data.project_code || '',
       name: response.data.name || data.name,
       description: response.data.description || data.description,
@@ -147,11 +180,16 @@ export const debatesService = {
       debate_topic: response.data.debate_topic || data.debate_topic,
       mode: response.data.mode || data.mode,
       status: response.data.status || 'draft',
-      created_at: response.data.created_at || new Date().toISOString(),
+      created_at: response.data.created_at || createdAtISO,
       started_at: response.data.started_at,
       completed_at: response.data.completed_at,
       user_code: response.data.user_code || '',
     });
+    saveDebateMetadata(createdDebate.code, {
+      mode: data.mode,
+      created_ts: createdDebate.created_ts || createdTs,
+    });
+    return { ...createdDebate, mode: data.mode };
   },
 
   /**

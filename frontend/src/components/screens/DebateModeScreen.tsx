@@ -39,7 +39,7 @@ export const DebateModeScreen: React.FC<DebateModeScreenProps> = ({
         <div className="mx-auto w-full max-w-[1040px]">
           <BrandHeader className="mb-8" />
           <Breadcrumbs
-            className="mb-3"
+            className="mb-4"
             items={[
               { label: 'Panel de Control', onClick: onBack },
               { label: 'Nuevo Debate' },

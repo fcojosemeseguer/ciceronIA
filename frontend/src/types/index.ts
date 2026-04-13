@@ -132,6 +132,7 @@ export interface Debate {
   
   // Timestamps
   created_at: string;
+  created_ts?: number;
   started_at?: string;
   completed_at?: string;
   
