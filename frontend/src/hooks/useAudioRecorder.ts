@@ -4,7 +4,7 @@
  * Compatible con APIs de procesamiento de audio
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { AudioRecording } from '../types';
 
 interface UseAudioRecorderReturn {
@@ -85,6 +85,32 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const cleanupMediaResources = useCallback(async () => {
+    if (processorNodeRef.current) {
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
+    }
+
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      try {
+        await audioContextRef.current.close();
+      } catch {
+        // Ignorar errores de cierre
+      }
+      audioContextRef.current = null;
+    }
+  }, []);
+
   const startRecording = useCallback(async () => {
     try {
       clearError();
@@ -144,24 +170,13 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
 
     // Desconectar y detener
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current = null;
-    }
-
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
-    }
-
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
+    await cleanupMediaResources();
 
     try {
       // Crear AudioBuffer a partir de los chunks
-      const audioContext = audioContextRef.current;
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 44100,
+      });
       const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
       
       // Validar que hay datos de audio
@@ -180,9 +195,8 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         offset += chunk.length;
       }
 
-      // Cerrar AudioContext
+      // Cerrar AudioContext temporal
       await audioContext.close();
-      audioContextRef.current = null;
 
       setIsRecording(false);
 
@@ -206,19 +220,18 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       console.error('Error al procesar la grabación:', error);
       
       // Asegurar que el AudioContext se cierre incluso si hay error
-      if (audioContextRef.current) {
-        try {
-          await audioContextRef.current.close();
-        } catch (e) {
-          // Ignorar error al cerrar
-        }
-        audioContextRef.current = null;
-      }
+      await cleanupMediaResources();
       
       setIsRecording(false);
       return null;
     }
-  }, [isRecording]);
+  }, [cleanupMediaResources, isRecording]);
+
+  useEffect(() => {
+    return () => {
+      cleanupMediaResources();
+    };
+  }, [cleanupMediaResources]);
 
   return {
     isRecording,

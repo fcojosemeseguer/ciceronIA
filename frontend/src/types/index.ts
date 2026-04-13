@@ -120,6 +120,8 @@ export interface Debate {
   team_a_name: string;
   team_b_name: string;
   debate_topic: string;
+  team_a_color?: string;
+  team_b_color?: string;
   
   // Modo y estado
   mode: DebateMode;
@@ -155,6 +157,8 @@ export interface CreateDebateData {
   team_b_name: string;
   debate_topic: string;
   mode: DebateMode;
+  team_a_color?: string;
+  team_b_color?: string;
 }
 
 /**

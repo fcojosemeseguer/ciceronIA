@@ -124,8 +124,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               <span className="w-2 h-2 rounded-full bg-[#00E5FF]" />
               <span>Debate, evaluación y seguimiento</span>
             </div>
-            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-4">
-              CiceronIA
+            <h1 className="brand-wordmark text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-4">
+              CICERONIA
             </h1>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium text-white/75 mb-5">
               El Juez IA de Debate
@@ -195,7 +195,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
                 Cómo Funciona
               </h2>
               <p className="text-lg text-white/60 max-w-2xl mx-auto">
-                Descubre cómo CiceronIA revoluciona la forma de organizar y evaluar debates
+                Descubre cómo CICERONIA revoluciona la forma de organizar y evaluar debates
               </p>
             </div>
 
@@ -330,7 +330,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
                 {
                   name: 'Francisco Pérez',
                   role: 'Fundador & CEO',
-                  description: 'Apasionado por el debate y la inteligencia artificial. Creador de la visión de CiceronIA.',
+                  description: 'Apasionado por el debate y la inteligencia artificial. Creador de la visión de CICERONIA.',
                   avatar: 'FP'
                 },
                 {
@@ -403,7 +403,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
         {/* Footer */}
         <footer className="py-6 px-4 text-center border-t border-white/10">
           <p className="text-white/40 text-sm">
-            © 2026 CiceronIA. Todos los derechos reservados.
+            © 2026 CICERONIA. Todos los derechos reservados.
           </p>
         </footer>
       </div>

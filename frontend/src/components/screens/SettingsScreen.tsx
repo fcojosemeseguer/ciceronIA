@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useMicrophoneTest } from '../../hooks/useMicrophoneTest';
 import { LiquidGlassButton } from '../common';
-import { AppTheme, applyTheme, DEFAULT_THEME, THEME_OPTIONS } from '../../utils/theme';
+import { ThemeMode, applyTheme, getStoredThemePreference, resolveThemePreference, THEME_OPTIONS } from '../../utils/theme';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -30,12 +30,12 @@ interface SettingsScreenProps {
 
 interface AppSettings {
   notificationSounds: boolean;
-  theme: AppTheme;
+  theme: ThemeMode;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   notificationSounds: true,
-  theme: DEFAULT_THEME,
+  theme: 'light',
 };
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
@@ -62,15 +62,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   // Cargar configuración guardada
   useEffect(() => {
     const savedSettings = localStorage.getItem('ciceron_settings');
+    const storedThemePreference = getStoredThemePreference();
+    const resolvedTheme = resolveThemePreference(storedThemePreference);
+
     if (savedSettings) {
       try {
         const merged = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
-        setSettings(merged);
-        applyTheme(merged.theme);
+        setSettings({ ...merged, theme: merged.theme === 'dark' ? 'dark' : merged.theme === 'light' ? 'light' : resolvedTheme });
       } catch {
         console.error('Error loading settings');
       }
+    } else {
+      setSettings((prev) => ({ ...prev, theme: resolvedTheme }));
     }
+
+    applyTheme(storedThemePreference);
     
     const savedUsername = localStorage.getItem('ciceron_username');
     if (savedUsername) {
@@ -110,8 +116,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar TODOS los datos? Esta acción no se puede deshacer.')) {
       localStorage.clear();
       setUsername('');
-      setSettings(DEFAULT_SETTINGS);
-      applyTheme(DEFAULT_SETTINGS.theme);
+      const fallbackTheme = resolveThemePreference('system');
+      setSettings({ ...DEFAULT_SETTINGS, theme: fallbackTheme });
+      applyTheme('system');
       setSaveMessage('Todos los datos han sido eliminados');
       setTimeout(() => setSaveMessage(''), 3000);
     }
@@ -126,7 +133,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   ];
 
   return (
-    <div className="app-shell overflow-y-auto pb-32">
+    <div className="app-shell settings-scope overflow-y-auto pb-32">
       {/* Header */}
       <div className="pt-20 pb-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">

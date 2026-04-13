@@ -1,0 +1,121 @@
+{
+    "color": {
+        "primary": {
+            "green": {
+                "value": "#3A7D44"
+            },
+            "gold": {
+                "value": "#E6C068"
+            },
+            "brown": {
+                "value": "#A47148"
+            },
+            "dark": {
+                "value": "#2C2C2C"
+            },
+            "light": {
+                "value": "#F5F5F3"
+            }
+        },
+        "teams": {
+            "team1": {
+                "home": {
+                    "value": "#3A6EA5"
+                },
+                "away": {
+                    "value": "#C44536"
+                }
+            },
+            "team2": {
+                "home": {
+                    "value": "#5E8C61"
+                },
+                "away": {
+                    "value": "#7B2CBF"
+                }
+            },
+            "team3": {
+                "home": {
+                    "value": "#6C757D"
+                },
+                "away": {
+                    "value": "#D62828"
+                }
+            },
+            "team4": {
+                "home": {
+                    "value": "#6B8E23"
+                },
+                "away": {
+                    "value": "#983955"
+                }
+            },
+            "team5": {
+                "home": {
+                    "value": "#D4A373"
+                },
+                "away": {
+                    "value": "#1D3557"
+                }
+            }
+        }
+    },
+    "font": {
+        "family": {
+            "inter": {
+                "value": "Inter"
+            }
+        },
+        "weight": {
+            "thin": {
+                "value": 100
+            },
+            "extraLight": {
+                "value": 200
+            },
+            "light": {
+                "value": 300
+            },
+            "regular": {
+                "value": 400
+            },
+            "bold": {
+                "value": 700
+            },
+            "extraBold": {
+                "value": 800
+            }
+        },
+        "size": {
+            "64": {
+                "value": "64px"
+            },
+            "48": {
+                "value": "48px"
+            },
+            "32": {
+                "value": "32px"
+            },
+            "24": {
+                "value": "24px"
+            },
+            "20": {
+                "value": "20px"
+            },
+            "16": {
+                "value": "16px"
+            },
+            "96_dashboard": {
+                "value": "96px"
+            },
+            "110_timer": {
+                "value": "110px"
+            }
+        }
+    },
+    "radius": {
+        "lg": {
+            "value": "20px"
+        }
+    }
+}

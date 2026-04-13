@@ -189,7 +189,7 @@ const CardNav: React.FC<CardNavProps> = ({
       <nav
         ref={navRef}
         className="block h-[60px] rounded-xl relative overflow-visible will-change-[height] backdrop-blur-xl border"
-        style={{ background: baseColor === '#fff' ? 'var(--glass-bg)' : baseColor, borderColor: 'var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}
+        style={{ background: 'rgba(2,6,23,0.68)', borderColor: 'rgba(255,255,255,0.10)', boxShadow: '0 18px 48px rgba(2,6,23,0.38)' }}
       >
         <div className="card-nav-top absolute inset-x-0 top-0 h-[60px] flex items-center justify-between gap-3 p-2 pl-4 pr-3 z-[2]">
           <div
@@ -198,7 +198,7 @@ const CardNav: React.FC<CardNavProps> = ({
             role="button"
             aria-label={isExpanded ? 'Cerrar menu' : 'Abrir menu'}
             tabIndex={0}
-            style={{ color: menuColor || 'var(--app-text)' }}
+            style={{ color: menuColor || '#fff' }}
           >
             <div
               className={`hamburger-line w-[30px] h-[2px] bg-current transition-[transform,opacity,margin] duration-300 ease-linear [transform-origin:50%_50%] ${
@@ -216,8 +216,8 @@ const CardNav: React.FC<CardNavProps> = ({
             <div className="w-8 h-8 flex items-center justify-center shrink-0">
               <img src="/logo.svg" alt={logoAlt} className="w-full h-full object-contain" />
             </div>
-            <span className="text-lg font-bold tracking-tight hidden sm:block" style={{ color: 'var(--app-text)' }}>
-              CiceronIA
+            <span className="brand-wordmark text-lg font-bold tracking-tight hidden sm:block text-white">
+              CICERONIA
             </span>
           </div>
 
@@ -227,24 +227,24 @@ const CardNav: React.FC<CardNavProps> = ({
                 <button
                   onClick={() => setShowUserDropdown((prev) => !prev)}
                   className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg border transition-all duration-300"
-                  style={{ background: 'var(--app-surface)', borderColor: 'var(--app-border)' }}
+                  style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)' }}
                 >
-                  <div className="w-7 h-7 rounded-full border flex items-center justify-center font-semibold text-xs" style={{ background: 'var(--app-surface-strong)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}>
+                  <div className="w-7 h-7 rounded-full border flex items-center justify-center font-semibold text-xs" style={{ background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.9)' }}>
                     {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
                   </div>
-                  <span className="hidden sm:block text-sm font-medium max-w-[110px] truncate" style={{ color: 'var(--app-text)' }}>
+                  <span className="hidden sm:block text-sm font-medium max-w-[110px] truncate text-white/90">
                     {user.name || user.email}
                   </span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} style={{ color: 'var(--app-text-muted)' }} />
+                  <ChevronDown className={`w-4 h-4 text-white/60 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {showUserDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-56 backdrop-blur-xl border rounded-xl overflow-hidden z-50" style={{ background: 'var(--glass-bg-strong)', borderColor: 'var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
-                      <div className="p-3 border-b" style={{ borderColor: 'var(--app-border)' }}>
-                        <p className="font-medium text-sm truncate" style={{ color: 'var(--app-text)' }}>{user.name}</p>
-                        <p className="text-xs truncate" style={{ color: 'var(--app-text-muted)' }}>{user.email}</p>
+                    <div className="absolute right-0 top-full mt-2 w-56 backdrop-blur-xl border rounded-xl overflow-hidden z-50" style={{ background: 'rgba(2,6,23,0.92)', borderColor: 'rgba(255,255,255,0.1)', boxShadow: '0 18px 48px rgba(2,6,23,0.42)' }}>
+                      <div className="p-3 border-b border-white/10">
+                        <p className="font-medium text-sm truncate text-white">{user.name}</p>
+                        <p className="text-xs truncate text-white/50">{user.email}</p>
                       </div>
                       {onSettingsClick && (
                         <button
@@ -252,10 +252,9 @@ const CardNav: React.FC<CardNavProps> = ({
                             onSettingsClick();
                             setShowUserDropdown(false);
                           }}
-                          className="w-full px-4 py-3 flex items-center gap-2 hover:opacity-80 transition-colors text-sm"
-                          style={{ color: 'var(--app-text)' }}
+                          className="w-full px-4 py-3 flex items-center gap-2 text-white/85 hover:bg-white/5 transition-colors text-sm"
                         >
-                          <Settings className="w-4 h-4" style={{ color: 'var(--app-text-muted)' }} />
+                          <Settings className="w-4 h-4 text-white/70" />
                           <span>Configuracion</span>
                         </button>
                       )}
@@ -336,7 +335,7 @@ const CardNav: React.FC<CardNavProps> = ({
           {user && (
             <div
               className="nav-card select-none relative flex flex-col gap-2 p-[12px_16px] rounded-[calc(0.75rem-0.2rem)] min-w-0 flex-[1_1_auto] h-auto min-h-[60px] sm:hidden"
-              style={{ background: 'var(--app-surface)', color: 'var(--app-text)' }}
+              style={{ backgroundColor: '#0f172a', color: '#fff' }}
             >
               <div className="nav-card-label font-normal tracking-[-0.5px] text-[18px]">
                 Sesion

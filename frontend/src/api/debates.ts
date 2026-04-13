@@ -53,16 +53,22 @@ interface CreateDebateResponse {
 }
 
 // Helper para normalizar backend response a tipo Debate
-const normalizeDebate = (backendDebate: BackendDebate): Debate => ({
-  ...backendDebate,
-  code: backendDebate.code || backendDebate.project_code || '',
-  description: backendDebate.description || backendDebate.desc || '',
-  debate_topic: backendDebate.debate_topic || backendDebate.name || '',
-  team_a_name: backendDebate.team_a_name || 'A favor',
-  team_b_name: backendDebate.team_b_name || 'En contra',
-  mode: (backendDebate.mode as DebateMode) || 'analysis',
-  status: (backendDebate.status as DebateStatus) || 'draft',
-});
+const normalizeDebate = (backendDebate: BackendDebate): Debate => {
+  const createdAtRaw = backendDebate.created_at;
+  const createdAtTime = createdAtRaw ? new Date(createdAtRaw).getTime() : NaN;
+
+  return {
+    ...backendDebate,
+    code: backendDebate.code || backendDebate.project_code || '',
+    description: backendDebate.description || backendDebate.desc || '',
+    debate_topic: backendDebate.debate_topic || backendDebate.name || '',
+    team_a_name: backendDebate.team_a_name || 'A favor',
+    team_b_name: backendDebate.team_b_name || 'En contra',
+    mode: (backendDebate.mode as DebateMode) || 'analysis',
+    status: (backendDebate.status as DebateStatus) || 'draft',
+    created_at: Number.isFinite(createdAtTime) ? new Date(createdAtTime).toISOString() : new Date().toISOString(),
+  };
+};
 
 export const debatesService = {
   /**
@@ -133,7 +139,7 @@ export const debatesService = {
     });
     return normalizeDebate({
       code: response.data.debate_code || response.data.project_code || '',
-      name: response.data.name || data.debate_topic,
+      name: response.data.name || data.name,
       description: response.data.description || data.description,
       debate_type: response.data.debate_type || data.debate_type,
       team_a_name: response.data.team_a_name || data.team_a_name,

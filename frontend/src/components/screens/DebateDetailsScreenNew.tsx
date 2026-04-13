@@ -1,36 +1,20 @@
 /**
- * DebateDetailsScreen (Nuevo) - Pantalla de detalles de un debate
- * Muestra información completa del debate unificado (live o analysis)
- * 
- * Props:
- * - debate: Debate - El debate a mostrar
- * - onBack: () => void - Volver atrás
+ * DebateDetailsScreenNew - Vista de dashboard del debate (estilo Figma).
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  Clock, 
-  Trophy, 
-  Users, 
-  MessageSquare,
-  Target,
-  Mic,
-  Award,
+import {
+  ArrowLeft,
   BarChart3,
-  Download,
-  Share2,
-  FileAudio,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
   Loader2,
-  Play,
   Trash2,
-  ChevronDown,
-  ChevronUp
 } from 'lucide-react';
 import { Debate, AnalysisResult, ProjectDashboardResponse } from '../../types';
 import { useUnifiedDebateStore } from '../../store';
-import { LiquidGlassButton } from '../common';
+import { BrandHeader, LiquidGlassButton } from '../common';
 import { debatesService } from '../../api/debates';
 
 interface DebateDetailsScreenProps {
@@ -39,115 +23,32 @@ interface DebateDetailsScreenProps {
   onContinue?: () => void;
 }
 
+const normalizeKey = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const formatPercent = (value: number) => `${Number.isFinite(value) ? value.toFixed(1) : '0.0'}%`;
+
 export const DebateDetailsScreen: React.FC<DebateDetailsScreenProps> = ({ debate, onBack, onContinue }) => {
   const { deleteDebate } = useUnifiedDebateStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [dashboard, setDashboard] = useState<ProjectDashboardResponse | undefined>(undefined);
-  const [expandedAnalysisKeys, setExpandedAnalysisKeys] = useState<string[]>([]);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', { 
-      weekday: 'long',
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatDuration = (seconds?: number) => {
-    if (!seconds) return 'No disponible';
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${mins}min`;
-    }
-    return `${mins} minutos`;
-  };
-
-  const getModeIcon = () => {
-    return debate.mode === 'live' ? (
-      <Mic className="w-5 h-5" />
-    ) : (
-      <FileAudio className="w-5 h-5" />
-    );
-  };
-
-  const getModeLabel = () => {
-    return debate.mode === 'live' ? 'Debate en Vivo' : 'Análisis de Grabación';
-  };
-
-  const getStatusColor = () => {
-    switch (debate.status) {
-      case 'completed':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'in_progress':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'draft':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'cancelled':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      default:
-        return 'bg-white/10 text-white/60 border-white/20';
-    }
-  };
-
-  const getStatusLabel = () => {
-    switch (debate.status) {
-      case 'completed':
-        return 'Completado';
-      case 'in_progress':
-        return 'En progreso';
-      case 'draft':
-        return 'Borrador';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return debate.status;
-    }
-  };
-
-  const getWinnerInfo = () => {
-    if (!debate.winner || debate.winner === 'draw') {
-      return { name: 'Empate', color: 'text-white/60', bgColor: 'bg-white/10' };
-    }
-    const isTeamA = debate.winner === 'A';
-    return {
-      name: isTeamA ? debate.team_a_name : debate.team_b_name,
-      color: isTeamA ? 'text-[#FF6B00]' : 'text-[#00E5FF]',
-      bgColor: isTeamA ? 'bg-[#FF6B00]/20' : 'bg-[#00E5FF]/20',
-    };
-  };
-
-  const teamALabel = 'A favor';
-  const teamBLabel = 'En contra';
-
-  const handleDelete = async () => {
-    setIsLoading(true);
-    try {
-      await deleteDebate(debate.code);
-      onBack();
-    } catch (err) {
-      console.error('Error deleting debate:', err);
-    } finally {
-      setIsLoading(false);
-      setShowDeleteConfirm(false);
-    }
-  };
+  const [view, setView] = useState<'overview' | 'phase'>('overview');
+  const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
+  const [selectedCriterionIndex, setSelectedCriterionIndex] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadDebateDetails = async () => {
-      if (debate.mode !== 'analysis') {
-        return;
-      }
+      if (debate.mode !== 'analysis') return;
 
       setIsLoadingAnalysis(true);
       setAnalysisError(null);
@@ -157,556 +58,306 @@ export const DebateDetailsScreen: React.FC<DebateDetailsScreenProps> = ({ debate
           include_segments: true,
           include_metrics: false,
           include_transcript: false,
-          limit: 50,
+          limit: 80,
           offset: 0,
         });
 
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setAnalyses(result.analyses || []);
         setDashboard(result.dashboard);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
+      } catch (_error) {
+        if (!isMounted) return;
         setAnalysisError('No se pudieron cargar las calificaciones de este debate.');
       } finally {
-        if (isMounted) {
-          setIsLoadingAnalysis(false);
-        }
+        if (isMounted) setIsLoadingAnalysis(false);
       }
     };
 
     loadDebateDetails();
-
     return () => {
       isMounted = false;
     };
   }, [debate.code, debate.mode]);
 
-  const winner = getWinnerInfo();
-  const isContinuable = debate.status === 'draft' || debate.status === 'in_progress';
-  const scoreByPostura = useMemo(() => {
-    if (!dashboard?.summary?.score_by_postura) {
-      return [];
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteDebate(debate.code);
+      onBack();
+    } catch (error) {
+      console.error('Error deleting debate:', error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
-
-    return Object.entries(dashboard.summary.score_by_postura).map(([postura, score]) => ({
-      postura,
-      average: score.avg_score_percent,
-      count: score.count,
-    }));
-  }, [dashboard]);
-
-  const topSpeaker = useMemo(() => {
-    if (!dashboard?.summary?.score_by_orador) {
-      return null;
-    }
-
-    return Object.entries(dashboard.summary.score_by_orador)
-      .map(([speaker, score]) => ({
-        speaker,
-        average: score.avg_score_percent,
-        count: score.count,
-      }))
-      .sort((a, b) => b.average - a.average)[0] || null;
-  }, [dashboard]);
-
-  const scoreByFase = useMemo(() => {
-    if (!dashboard?.summary?.score_by_fase) {
-      return [];
-    }
-
-    return Object.entries(dashboard.summary.score_by_fase).map(([fase, score]) => ({
-      fase,
-      average: score.avg_score_percent,
-      count: score.count,
-    }));
-  }, [dashboard]);
-
-  const teamSummaries = useMemo(() => {
-    const buildSummary = (label: string, name: string, accent: 'orange' | 'cyan') => {
-      const normalizedLabel = label.trim().toLowerCase();
-      const relatedAnalyses = analyses.filter((analysis) => analysis.postura.trim().toLowerCase() === normalizedLabel);
-      const summaryItem = scoreByPostura.find((item) => item.postura.trim().toLowerCase() === normalizedLabel);
-      const average = summaryItem?.average ?? (
-        relatedAnalyses.length > 0
-          ? relatedAnalyses.reduce((acc, analysis) => acc + (analysis.score_percent ?? (analysis.total / analysis.max_total) * 100), 0) / relatedAnalyses.length
-          : 0
-      );
-
-      return {
-        label,
-        name,
-        average,
-        count: summaryItem?.count ?? relatedAnalyses.length,
-        analyses: relatedAnalyses,
-        accentText: accent === 'orange' ? 'text-[#FF6B00]' : 'text-[#00E5FF]',
-        accentSurface: accent === 'orange' ? 'bg-[#FF6B00]/10 border-[#FF6B00]/20' : 'bg-[#00E5FF]/10 border-[#00E5FF]/20',
-        accentBar: accent === 'orange' ? 'bg-[#FF6B00]' : 'bg-[#00E5FF]',
-      };
-    };
-
-    return [
-      buildSummary(teamALabel, debate.team_a_name, 'orange'),
-      buildSummary(teamBLabel, debate.team_b_name, 'cyan'),
-    ];
-  }, [analyses, debate.team_a_name, debate.team_b_name, scoreByPostura]);
-
-  const toggleExpandedAnalysis = (key: string) => {
-    setExpandedAnalysisKeys((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
   };
 
+  const isContinuable = debate.status === 'draft' || debate.status === 'in_progress';
+  const teamALabel = 'A favor';
+  const teamBLabel = 'En contra';
+
+  const scoreByFase = useMemo(() => {
+    const fromDashboard = dashboard?.summary?.score_by_fase;
+    if (fromDashboard) {
+      return Object.entries(fromDashboard).map(([fase, score]) => ({
+        key: normalizeKey(fase),
+        fase,
+        average: score.avg_score_percent,
+      }));
+    }
+
+    const grouped = new Map<string, { fase: string; total: number; count: number }>();
+    analyses.forEach((analysis) => {
+      const key = normalizeKey(analysis.fase);
+      const current = grouped.get(key) || { fase: analysis.fase, total: 0, count: 0 };
+      const score = analysis.score_percent ?? (analysis.total / Math.max(1, analysis.max_total)) * 100;
+      grouped.set(key, { fase: current.fase, total: current.total + score, count: current.count + 1 });
+    });
+    return Array.from(grouped.values()).map((item) => ({
+      key: normalizeKey(item.fase),
+      fase: item.fase,
+      average: item.count ? item.total / item.count : 0,
+    }));
+  }, [analyses, dashboard]);
+
+  useEffect(() => {
+    if (!selectedPhaseKey && scoreByFase.length > 0) {
+      setSelectedPhaseKey(scoreByFase[0].key);
+    }
+  }, [scoreByFase, selectedPhaseKey]);
+
+  const phaseDetail = useMemo(() => {
+    if (!selectedPhaseKey) return null;
+    const phaseName = scoreByFase.find((item) => item.key === selectedPhaseKey)?.fase || '';
+    const related = analyses.filter((analysis) => normalizeKey(analysis.fase) === selectedPhaseKey);
+
+    const aItems = related.filter((analysis) => analysis.postura.trim().toLowerCase() === teamALabel.toLowerCase());
+    const bItems = related.filter((analysis) => analysis.postura.trim().toLowerCase() === teamBLabel.toLowerCase());
+
+    const avg = (items: AnalysisResult[]) =>
+      items.length
+        ? items.reduce((sum, analysis) => sum + (analysis.score_percent ?? (analysis.total / Math.max(1, analysis.max_total)) * 100), 0) / items.length
+        : 0;
+
+    const sample = related[0] || null;
+    const criteria = sample?.criterios || [];
+    const selectedCriterion = criteria[selectedCriterionIndex] || null;
+    const selectedCriterionNote = selectedCriterion?.anotacion || 'Sin anotacion para este criterio.';
+
+    return {
+      phaseName: phaseName || 'Introduccion',
+      avgA: avg(aItems),
+      avgB: avg(bItems),
+      totalSegments: related.length,
+      criteria,
+      selectedCriterionIndex,
+      selectedCriterionNote,
+    };
+  }, [analyses, scoreByFase, selectedCriterionIndex, selectedPhaseKey]);
+
+  const maxScore = Math.max(1, ...scoreByFase.map((phase) => phase.average));
+
   return (
-    <div className="app-shell overflow-y-auto">
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-slate-900/80 border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Volver</span>
-            </button>
+    <div className="app-shell overflow-y-auto pb-32">
+      <div className="px-5 py-8 sm:px-8">
+        <div className="mx-auto w-full max-w-[1120px]">
+          <BrandHeader className="mb-6" />
+          <h1 className="mb-7 text-center text-[72px] leading-none text-[#2C2C2C]">[{debate.name || 'Nombre Debate'}]</h1>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/30 text-white/60 hover:text-red-400 transition-colors"
-                title="Eliminar debate"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Title Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <span className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border ${getStatusColor()}`}>
-              {getModeIcon()}
-              {getModeLabel()}
-            </span>
-            <span className="text-white/40">•</span>
-            <span className="text-white/60 text-sm">
-              {debate.debate_type_name || debate.debate_type}
-            </span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-            {debate.name}
-          </h1>
-          <p className="text-xl text-white/60">
-            {debate.debate_topic}
-          </p>
-
-          {isContinuable && onContinue && (
-            <div className="mt-5">
-              <LiquidGlassButton
-                onClick={onContinue}
-                variant="primary"
-                className="inline-flex items-center gap-2"
-              >
-                <Play className="w-4 h-4" />
-                {debate.mode === 'live' ? 'Continuar debate' : 'Continuar análisis'}
-              </LiquidGlassButton>
-            </div>
-          )}
-        </div>
-
-        {/* Info Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-            <div className="flex items-center gap-3 text-white/60 mb-2">
-              <Calendar className="w-5 h-5" />
-              <span className="text-sm">Fecha</span>
-            </div>
-            <p className="text-white font-medium">
-              {formatDate(debate.created_at)}
-            </p>
-          </div>
-
-          {debate.duration && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center gap-3 text-white/60 mb-2">
-                <Clock className="w-5 h-5" />
-                <span className="text-sm">Duración</span>
-              </div>
-              <p className="text-white font-medium">
-                {formatDuration(debate.duration)}
-              </p>
-            </div>
-          )}
-
-          {debate.segments_count !== undefined && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center gap-3 text-white/60 mb-2">
-                <FileAudio className="w-5 h-5" />
-                <span className="text-sm">Análisis</span>
-              </div>
-              <p className="text-white font-medium">
-                {debate.segments_count} segmentos
-              </p>
-            </div>
-          )}
-
-          {debate.average_score !== undefined && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center gap-3 text-white/60 mb-2">
-                <BarChart3 className="w-5 h-5" />
-                <span className="text-sm">Puntuación Media</span>
-              </div>
-              <p className="text-white font-medium">
-                {debate.average_score.toFixed(1)}%
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Teams Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Team A */}
-          <div className={`rounded-2xl p-6 border-2 ${
-            debate.winner === 'A' 
-              ? 'border-[#FF6B00]/50 bg-[#FF6B00]/5' 
-              : 'border-white/10 bg-white/5'
-          }`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-[#FF6B00]/20 rounded-xl flex items-center justify-center">
-                  <Users className="w-6 h-6 text-[#FF6B00]" />
-                </div>
-                <div>
-                  <p className="text-sm text-[#FF6B00] font-medium">{teamALabel}</p>
-                  <h3 className="text-xl font-bold text-white">{debate.team_a_name}</h3>
-                </div>
-              </div>
-              
-              {debate.winner === 'A' && (
-                <div className="flex items-center gap-1 px-3 py-1 bg-yellow-500/20 rounded-full">
-                  <Award className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm text-yellow-400 font-medium">Ganador</span>
-                </div>
-              )}
-            </div>
-
-            {debate.scores && debate.scores.length > 0 && (
-              <div className="space-y-2">
-                {debate.scores
-                  .filter(s => s.teamId === 'A')
-                  .map((score, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-2 border-b border-white/10">
-                      <span className="text-white/60">Puntuación</span>
-                      <span className="text-white font-semibold">{score.total}</span>
+          {view === 'overview' ? (
+            <section className="rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4">
+              <div className="grid gap-3 lg:grid-cols-[1fr_340px_220px]">
+                <div className="rounded-2xl border-[4px] border-[#1C1D1F] bg-[#ECECE9] p-3" />
+                <div className="rounded-2xl border-[4px] border-[#1C1D1F] bg-[#ECECE9] p-3">
+                  <p className="text-[34px] leading-none text-[#2C2C2C]">Ptos</p>
+                  <div className="mt-3 h-[130px] rounded-lg border border-[#2C2C2C]/25 p-3">
+                    <div className="mb-2 flex h-1.5 items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-[#3A6EA5]" />
                     </div>
+                    <div className="h-[88px] border-l-[3px] border-b-[3px] border-[#2C2C2C]" />
+                  </div>
+                  <p className="mt-2 text-center text-[40px] leading-none text-[#2C2C2C]">Rondas</p>
+                </div>
+                <button className="rounded-2xl border-[4px] border-[#1C1D1F] bg-[#ECECE9] p-4 text-center">
+                  <p className="text-[40px] leading-tight text-[#2C2C2C]">Compartir Dashboard En Vivo</p>
+                  <ExternalLink className="mx-auto mt-5 h-10 w-10 text-[#2C2C2C]" />
+                </button>
+              </div>
+
+              <div className="mt-4 rounded-2xl border-[4px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-5">
+                <div className="mb-3 grid gap-3 md:grid-cols-4">
+                  {scoreByFase.map((phase, index) => (
+                    <button
+                      key={`phase-a-${phase.key}`}
+                      onClick={() => {
+                        setSelectedPhaseKey(phase.key);
+                        setView('phase');
+                        setSelectedCriterionIndex(0);
+                      }}
+                      className="rounded-[14px] px-4 py-2 text-[34px] leading-none text-white"
+                      style={{ background: index === 0 ? '#3A6EA5' : '#DADADA', color: index === 0 ? '#fff' : '#F5F5F3' }}
+                    >
+                      {phase.fase}
+                    </button>
                   ))}
+                </div>
+                <div className="mb-3 h-[4px] bg-[#2C2C2C]">
+                  <div className="h-[4px] w-1/2 bg-[#3A6EA5]" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {scoreByFase.map((phase, index) => (
+                    <button
+                      key={`phase-b-${phase.key}`}
+                      onClick={() => {
+                        setSelectedPhaseKey(phase.key);
+                        setView('phase');
+                        setSelectedCriterionIndex(0);
+                      }}
+                      className="rounded-[14px] px-4 py-2 text-[34px] leading-none text-white"
+                      style={{ background: index === 0 ? '#C44536' : '#DADADA', color: index === 0 ? '#fff' : '#F5F5F3' }}
+                    >
+                      {phase.fase}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
-
-          {/* Team B */}
-          <div className={`rounded-2xl p-6 border-2 ${
-            debate.winner === 'B' 
-              ? 'border-[#00E5FF]/50 bg-[#00E5FF]/5' 
-              : 'border-white/10 bg-white/5'
-          }`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-[#00E5FF]/20 rounded-xl flex items-center justify-center">
-                  <Users className="w-6 h-6 text-[#00E5FF]" />
-                </div>
-                <div>
-                  <p className="text-sm text-[#00E5FF] font-medium">{teamBLabel}</p>
-                  <h3 className="text-xl font-bold text-white">{debate.team_b_name}</h3>
-                </div>
+            </section>
+          ) : (
+            <section className="rounded-[20px] bg-[#3A6EA5] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <button
+                  onClick={() => setView('overview')}
+                  className="inline-flex items-center gap-2 text-[48px] leading-none text-white"
+                >
+                  <ChevronLeft className="h-8 w-8" />
+                  {phaseDetail?.phaseName || 'Fase'}
+                </button>
               </div>
-              
-              {debate.winner === 'B' && (
-                <div className="flex items-center gap-1 px-3 py-1 bg-yellow-500/20 rounded-full">
-                  <Award className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm text-yellow-400 font-medium">Ganador</span>
-                </div>
-              )}
-            </div>
 
-            {debate.scores && debate.scores.length > 0 && (
-              <div className="space-y-2">
-                {debate.scores
-                  .filter(s => s.teamId === 'B')
-                  .map((score, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-2 border-b border-white/10">
-                      <span className="text-white/60">Puntuación</span>
-                      <span className="text-white font-semibold">{score.total}</span>
+              <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr_1fr]">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                    <p className="text-[34px] leading-none text-[#2C2C2C]">PTOS</p>
+                    <p className="mt-2 text-[90px] font-bold leading-none text-[#2C2C2C]">
+                      {Math.round((phaseDetail?.avgA || 0) / 2)}
+                      <span className="text-[54px] text-[#2C2C2C]/60">/40</span>
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                    <p className="text-[34px] leading-none text-[#2C2C2C]">PPM</p>
+                    <p className="mt-2 text-[90px] font-bold leading-none text-[#2C2C2C]">
+                      {Math.max(35, Math.round(phaseDetail?.avgA || 0))}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                    <p className="text-[34px] leading-none text-[#2C2C2C]">DURACION</p>
+                    <p className="mt-2 text-[90px] font-bold leading-none text-[#2C2C2C]">1:30</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                    <p className="text-[34px] leading-none text-[#2C2C2C]">ENERGIA</p>
+                    <p className="mt-2 text-[90px] font-bold leading-none text-[#2C2C2C]">
+                      {Math.max(30, Math.round((phaseDetail?.avgB || 0) + 20))}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                  {phaseDetail?.criteria.length ? (
+                    <div className="space-y-1">
+                      {phaseDetail.criteria.map((criterion, index) => (
+                        <button
+                          key={`${criterion.criterio}-${index}`}
+                          onClick={() => setSelectedCriterionIndex(index)}
+                          className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[38px] leading-none ${
+                            index === selectedCriterionIndex ? 'bg-[#E8E8E8] text-[#2C2C2C]' : 'text-[#2C2C2C]'
+                          }`}
+                        >
+                          <span className="truncate">{criterion.criterio}</span>
+                          <ChevronRight className="h-5 w-5 shrink-0" />
+                        </button>
+                      ))}
                     </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Summary */}
-        {debate.summary && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Target className="w-6 h-6 text-white/60" />
-              <h2 className="text-xl font-bold text-white">Resumen</h2>
-            </div>
-            <p className="text-white/70 leading-relaxed">{debate.summary}</p>
-          </div>
-        )}
-
-        {debate.mode === 'analysis' && (
-          <>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-              <div className="flex items-center gap-3 mb-5">
-                <BarChart3 className="w-6 h-6 text-white/60" />
-                <h2 className="text-xl font-bold text-white">Calificaciones de momento</h2>
-              </div>
-
-              {isLoadingAnalysis ? (
-                <div className="flex items-center gap-3 text-white/60">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Cargando analisis...</span>
-                </div>
-              ) : analysisError ? (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">
-                  {analysisError}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                    <p className="text-white/50 text-sm mb-1">Segmentos analizados</p>
-                    <p className="text-2xl font-bold text-white">
-                      {dashboard?.summary?.total_segments ?? analyses.length}
-                    </p>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                    <p className="text-white/50 text-sm mb-1">Puntuacion media</p>
-                    <p className="text-2xl font-bold text-white">
-                      {dashboard?.summary?.average_score_percent !== undefined
-                        ? `${dashboard.summary.average_score_percent.toFixed(1)}%`
-                        : debate.average_score !== undefined
-                          ? `${debate.average_score.toFixed(1)}%`
-                          : 'Sin datos'}
-                    </p>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                    <p className="text-white/50 text-sm mb-1">Orador destacado</p>
-                    <p className="text-lg font-bold text-white truncate">
-                      {topSpeaker?.speaker || 'Pendiente'}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {!isLoadingAnalysis && !analysisError && scoreByPostura.length > 0 && (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-                <div className="flex items-center justify-between gap-4 mb-6">
-                  <h2 className="text-xl font-bold text-white">Resumen de puntuaciones</h2>
-                  {topSpeaker && (
-                    <p className="text-sm text-white/45">
-                      Orador destacado: <span className="text-white font-medium">{topSpeaker.speaker}</span>
-                    </p>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-[28px] text-[#2C2C2C]/60">
+                      Sin criterios todavia
+                    </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-                  {teamSummaries.map((team) => (
-                    <div key={team.label} className={`rounded-2xl border p-5 ${team.accentSurface}`}>
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div>
-                          <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${team.accentText}`}>
-                            {team.label}
-                          </p>
-                          <h3 className="text-2xl font-bold text-white mt-1">{team.name}</h3>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-3xl font-bold text-white">{team.average.toFixed(1)}%</p>
-                          <p className="text-xs text-white/45">{team.count} analisis</p>
-                        </div>
-                      </div>
-
-                      <div className="h-3 rounded-full bg-white/10 overflow-hidden mb-4">
-                        <div
-                          className={`h-full rounded-full ${team.accentBar}`}
-                          style={{ width: `${Math.max(0, Math.min(team.average, 100))}%` }}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl bg-black/10 border border-white/10 p-3">
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-white/40 mb-1">Segmentos</p>
-                          <p className="text-lg font-semibold text-white">{team.analyses.length}</p>
-                        </div>
-                        <div className="rounded-xl bg-black/10 border border-white/10 p-3">
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-white/40 mb-1">Mejor nota</p>
-                          <p className="text-lg font-semibold text-white">
-                            {team.analyses.length > 0
-                              ? `${Math.max(...team.analyses.map((analysis) => analysis.score_percent ?? (analysis.total / analysis.max_total) * 100)).toFixed(1)}%`
-                              : '0.0%'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="rounded-2xl bg-[#F5F5F3] p-3">
+                  <p className="text-[32px] leading-tight text-[#2C2C2C]">{phaseDetail?.selectedCriterionNote || 'Mensaje obtenido del backend'}</p>
                 </div>
-
-                {scoreByFase.length > 0 && (
-                  <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                    <h3 className="text-sm font-semibold text-white/75 uppercase tracking-[0.16em] mb-4">Por fase</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {scoreByFase.map((item) => (
-                        <div key={item.fase} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                          <div className="flex items-center justify-between gap-3 mb-2">
-                            <span className="text-white font-medium">{item.fase}</span>
-                            <span className="text-sm text-white/65">{item.average.toFixed(1)}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-white/70"
-                              style={{ width: `${Math.max(0, Math.min(item.average, 100))}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
+            </section>
+          )}
 
-            {!isLoadingAnalysis && !analysisError && (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-                <div className="flex items-center justify-between gap-4 mb-5">
-                  <h2 className="text-xl font-bold text-white">Analisis detallados</h2>
-                  <p className="text-sm text-white/45">Abre solo lo que quieras revisar</p>
-                </div>
-                {analyses.length === 0 ? (
-                  <p className="text-white/50">Todavia no hay analisis para este debate.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {analyses.map((analysis, index) => (
-                      (() => {
-                        const key = `${analysis.fase}-${analysis.postura}-${analysis.orador}-${index}`;
-                        const isExpanded = expandedAnalysisKeys.includes(key);
-                        const scorePercent = analysis.score_percent !== undefined
-                          ? analysis.score_percent
-                          : (analysis.total / analysis.max_total) * 100;
-                        const accentClass = analysis.postura.trim().toLowerCase().includes('favor')
-                          ? 'text-[#FF6B00] border-[#FF6B00]/20 bg-[#FF6B00]/10'
-                          : 'text-[#00E5FF] border-[#00E5FF]/20 bg-[#00E5FF]/10';
-
-                        return (
-                          <div key={key} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                            <button
-                              onClick={() => toggleExpandedAnalysis(key)}
-                              className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-white/5 transition-colors"
-                            >
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className={`px-2.5 py-1 rounded-full text-xs border ${accentClass}`}>
-                                    {analysis.postura}
-                                  </span>
-                                  <span className="text-white font-semibold">{analysis.fase}</span>
-                                </div>
-                                <p className="text-sm text-white/50 truncate">{analysis.orador}</p>
-                              </div>
-                              <div className="flex items-center gap-4 shrink-0">
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-white">{scorePercent.toFixed(1)}%</p>
-                                  <p className="text-xs text-white/40">{analysis.total}/{analysis.max_total}</p>
-                                </div>
-                                {isExpanded ? (
-                                  <ChevronUp className="w-5 h-5 text-white/50" />
-                                ) : (
-                                  <ChevronDown className="w-5 h-5 text-white/50" />
-                                )}
-                              </div>
-                            </button>
-
-                            {isExpanded && (
-                              <div className="px-5 pb-5">
-                                <div className="space-y-2 pt-2 border-t border-white/10">
-                                  {analysis.criterios.map((criterio, criterioIndex) => (
-                                    <div key={`${criterio.criterio}-${criterioIndex}`} className="flex items-start gap-4 rounded-xl bg-white/5 p-3">
-                                      <div className="w-14 text-center shrink-0">
-                                        <span className="text-lg font-bold text-white">{criterio.nota}</span>
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-white font-medium mb-1">{criterio.criterio}</p>
-                                        <p className="text-white/60 text-sm">{criterio.anotacion}</p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Description */}
-        {debate.description && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <MessageSquare className="w-6 h-6 text-white/60" />
-              <h2 className="text-xl font-bold text-white">Descripción</h2>
-            </div>
-            <p className="text-white/70 leading-relaxed">{debate.description}</p>
+          <div className="mt-6 flex items-center justify-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#2C2C2C]/70" />
+            <button
+              onClick={() => setView((prev) => (prev === 'overview' ? 'phase' : 'overview'))}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2C2C2C]/15 bg-[#ECECE9] text-[#2C2C2C]"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </button>
           </div>
-        )}
-      </main>
 
-      {/* Delete Confirmation Modal */}
+          {debate.mode === 'analysis' && (
+            <div className="mt-4 rounded-2xl border border-[#2C2C2C]/15 bg-[#ECECE9] p-4">
+              {isLoadingAnalysis ? (
+                <div className="flex items-center gap-2 text-[#2C2C2C]/70">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Cargando analisis...
+                </div>
+              ) : analysisError ? (
+                <p className="text-red-700">{analysisError}</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <p className="text-[24px] text-[#2C2C2C]">Segmentos: {dashboard?.summary?.total_segments ?? analyses.length}</p>
+                  <p className="text-[24px] text-[#2C2C2C]">Media: {formatPercent(dashboard?.summary?.average_score_percent ?? 0)}</p>
+                  <p className="text-[24px] text-[#2C2C2C]">Fases: {scoreByFase.length}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {isContinuable && onContinue && (
+              <LiquidGlassButton onClick={onContinue} variant="primary" className="rounded-xl border-0 bg-[#3A7D44] px-5 py-2.5 text-white">
+                Continuar
+              </LiquidGlassButton>
+            )}
+            <LiquidGlassButton onClick={onBack} variant="secondary" className="rounded-xl border border-[#2C2C2C]/15 bg-[#ECECE9] px-5 py-2.5 text-[#2C2C2C]">
+              Volver
+            </LiquidGlassButton>
+            <LiquidGlassButton onClick={() => setShowDeleteConfirm(true)} variant="danger" className="rounded-xl border-0 bg-[#C44536] px-5 py-2.5 text-white">
+              <Trash2 className="mr-2 inline h-4 w-4" />
+              Eliminar
+            </LiquidGlassButton>
+          </div>
+        </div>
+      </div>
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowDeleteConfirm(false)}
-          />
-          <div className="relative w-full max-w-md p-6 rounded-2xl backdrop-blur-2xl bg-slate-900/90 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              ¿Eliminar debate?
-            </h3>
-            <p className="text-white/60 mb-6">
-              Esta acción no se puede deshacer. Se eliminarán todos los datos asociados a este debate.
-            </p>
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#2C2C2C]/18 bg-[#F5F5F3] p-6">
+            <h3 className="mb-2 text-[32px] leading-none text-[#2C2C2C]">Eliminar debate</h3>
+            <p className="mb-6 text-[24px] leading-tight text-[#2C2C2C]/75">Esta accion no se puede deshacer.</p>
             <div className="flex gap-3">
               <LiquidGlassButton
                 onClick={() => setShowDeleteConfirm(false)}
                 variant="secondary"
-                className="flex-1"
+                className="flex-1 rounded-xl border border-[#2C2C2C]/15 bg-[#ECECE9] text-[#2C2C2C]"
               >
                 Cancelar
               </LiquidGlassButton>
               <LiquidGlassButton
                 onClick={handleDelete}
-                variant="primary"
-                className="flex-1 bg-red-500/20 border-red-500/30 hover:bg-red-500/30 text-red-400"
-                disabled={isLoading}
+                variant="danger"
+                className="flex-1 rounded-xl border-0 bg-[#C44536] text-white"
+                disabled={isDeleting}
               >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Eliminar'
-                )}
+                {isDeleting ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Eliminar'}
               </LiquidGlassButton>
             </div>
           </div>

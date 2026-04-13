@@ -30,10 +30,15 @@ import { useDebateHistoryStore } from './store/debateHistoryStore';
 import { useDebateStore } from './store/debateStore';
 import { useDebateStore as useUnifiedDebateStore } from './store/debateStoreUnified';
 import { DebateHistory, Project, Debate, DebateMode } from './types';
-import { Dock, LiquidGlassButton } from './components/common';
-import { Home, Plus, AlertTriangle, FolderOpen, LayoutDashboard, History } from 'lucide-react';
+import { Dock } from './components/common';
+import { AlertTriangle } from 'lucide-react';
 import { loadLiveDebateSession } from './utils/debatePersistence';
-import { applyTheme, getStoredTheme } from './utils/theme';
+import { loadDebateTeamColors } from './utils/debateColors';
+import { initThemeSync } from './utils/theme';
+import backIcon from './assets/icons/icon-back.svg';
+import leftIcon from './assets/icons/icon-left.svg';
+import dashboardIcon from './assets/icons/icon-dashboard.svg';
+import settingsIcon from './assets/icons/icon-settings.svg';
 import './App.css';
 
 type AppScreen = 
@@ -59,7 +64,7 @@ type AppScreen =
   | 'debate-view';       // Reemplaza 'project-details'
 
 function App() {
-  const { checkAuth, isAuthenticated, logout } = useAuthStore();
+  const { checkAuth, isAuthenticated } = useAuthStore();
   const { selectedDebate, selectDebate } = useDebateHistoryStore();
   const { clearUploads } = useAnalysisStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
@@ -67,6 +72,8 @@ function App() {
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['landing']);
   const [pendingRedirectAfterAuth, setPendingRedirectAfterAuth] = useState<AppScreen | null>(null);
   const [publicDashboardToken, setPublicDashboardToken] = useState<string | null>(null);
+  const [isAppEntryTransitionActive, setIsAppEntryTransitionActive] = useState(false);
+  const [competitionDashboardView, setCompetitionDashboardView] = useState(false);
   
   // NUEVO: Estados para el sistema simplificado de debates
   const {
@@ -113,7 +120,7 @@ function App() {
   };
 
   useEffect(() => {
-    applyTheme(getStoredTheme());
+    const cleanupThemeSync = initThemeSync();
     checkAuth();
     const path = window.location.pathname;
     const publicDashboardMatch = path.match(/^\/public\/dashboard\/([^/]+)$/);
@@ -128,7 +135,14 @@ function App() {
     }
 
     setIsAuthChecked(true);
+    return cleanupThemeSync;
   }, [checkAuth]);
+
+  useEffect(() => {
+    if (currentScreen !== 'competition' && competitionDashboardView) {
+      setCompetitionDashboardView(false);
+    }
+  }, [currentScreen, competitionDashboardView]);
 
   // Navegación básica
   const handleGoToLanding = () => navigateTo('landing', 'replace');
@@ -183,10 +197,12 @@ function App() {
 
   // Handler para seleccionar un debate de la lista
   const handleSelectDebateFromList = (debate: Debate) => {
+    const savedColors = loadDebateTeamColors(debate.code);
+    const debateWithColors = savedColors ? { ...debate, ...savedColors } : debate;
     const persistedLiveSession = loadLiveDebateSession(debate.code);
     const resolvedDebate = persistedLiveSession
-      ? { ...debate, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
-      : debate;
+      ? { ...debateWithColors, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+      : debateWithColors;
 
     selectUnifiedDebate(resolvedDebate);
     if (resolvedDebate.status === 'draft' || resolvedDebate.status === 'in_progress') {
@@ -197,11 +213,13 @@ function App() {
   };
 
   const handleViewDebateDetails = (debate: Debate) => {
+    const savedColors = loadDebateTeamColors(debate.code);
+    const debateWithColors = savedColors ? { ...debate, ...savedColors } : debate;
     const persistedLiveSession = loadLiveDebateSession(debate.code);
     selectUnifiedDebate(
       persistedLiveSession
-        ? { ...debate, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
-        : debate
+        ? { ...debateWithColors, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+        : debateWithColors
     );
     navigateTo('debate-view');
   };
@@ -266,12 +284,24 @@ function App() {
   };
 
   // Flujo legacy
+  const runAppEntryTransition = (navigate: () => void) => {
+    setIsAppEntryTransitionActive(true);
+    window.setTimeout(() => {
+      navigate();
+    }, 220);
+    window.setTimeout(() => {
+      setIsAppEntryTransitionActive(false);
+    }, 900);
+  };
+
   const handleStartDebateFromLanding = () => {
-    if (isAuthenticated) {
-      navigateTo('dashboard');
-    } else {
-      handleGoToAuth('dashboard');
-    }
+    runAppEntryTransition(() => {
+      if (isAuthenticated) {
+        navigateTo('dashboard');
+      } else {
+        handleGoToAuth('dashboard');
+      }
+    });
   };
 
   const handleViewDebate = (debate: DebateHistory) => {
@@ -345,41 +375,40 @@ function App() {
 
   // Configurar items del dock - NAVEGACIÓN SIMPLIFICADA Y PREDECIBLE
   const getDockItems = () => {
-    const items = [];
-    
-    if (currentScreen === 'dashboard') {
+    const iconClass = 'h-8 w-8';
+    const items: Array<{ icon: React.ReactNode; label: string; onClick: () => void; active?: boolean }> = [];
+
+    if (currentScreen === 'dashboard' && isAuthenticated) {
       items.push({
-        icon: <Home className="w-6 h-6 text-white" />,
-        label: 'Inicio',
-        onClick: () => handleNavigationWithConfirm(handleGoToLanding)
+        icon: <img src={leftIcon} alt="" className={iconClass} aria-hidden />,
+        label: 'Salir',
+        onClick: () => navigateTo('landing', 'replace'),
+      });
+    } else if (currentScreen !== 'dashboard') {
+      items.push({
+        icon: <img src={backIcon} alt="" className={iconClass} aria-hidden />,
+        label: 'Volver',
+        onClick: () =>
+          currentScreen === 'competition'
+            ? handleNavigationWithConfirm(() => navigateTo('dashboard', 'replace'))
+            : handleNavigationWithConfirm(goBack),
       });
     }
 
-    // Siempre mostrar: Ir al Dashboard (Panel de Control)
-    // Excepto cuando ya estamos en el Dashboard
-    if (currentScreen !== 'dashboard') {
+    if (currentScreen === 'competition') {
       items.push({
-        icon: <LayoutDashboard className="w-6 h-6 text-white" />,
-        label: 'Panel',
-        onClick: () => handleNavigationWithConfirm(() => navigateTo('dashboard', 'replace'))
+        icon: <img src={dashboardIcon} alt="" className={iconClass} aria-hidden />,
+        label: 'Dashboard',
+        active: competitionDashboardView,
+        onClick: () => setCompetitionDashboardView((prev) => !prev),
       });
     }
 
-    // Nuevo Debate - visible desde dashboard o debates
-    if (currentScreen === 'dashboard' || currentScreen === 'debates') {
+    if (isAuthenticated) {
       items.push({
-        icon: <Plus className="w-6 h-6 text-white" />,
-        label: 'Nuevo Debate',
-        onClick: () => handleNewDebate()
-      });
-    }
-
-    // Debates Anteriores - visible cuando NO estamos ya en esa pantalla
-    if (isAuthenticated && currentScreen !== 'debates') {
-      items.push({
-        icon: <History className="w-6 h-6 text-white" />,
-        label: 'Debates',
-        onClick: () => handleViewDebates()
+        icon: <img src={settingsIcon} alt="" className={iconClass} aria-hidden />,
+        label: 'Ajustes',
+        onClick: () => handleGoToSettings(),
       });
     }
 
@@ -405,8 +434,8 @@ function App() {
 
   if (!isAuthChecked) {
     return (
-      <div className="w-full h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white/70"></div>
+      <div className="app-shell w-full h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: 'var(--app-text-muted)' }}></div>
       </div>
     );
   }
@@ -437,8 +466,6 @@ function App() {
             onNewDebate={handleNewDebate}
             onAnalyzeRecorded={handleAnalyzeRecorded}
             onViewHistory={handleViewHistory}
-            onGoToLanding={handleGoToLanding}
-            onGoToSettings={handleGoToSettings}
             // Nuevos handlers
             onNewLiveDebate={handleNewLiveDebate}
             onNewAnalysis={handleNewAnalysisDebate}
@@ -507,7 +534,9 @@ function App() {
         return (
           <DebateConfigScreen
             mode={configMode}
-            onBack={handleGoToDashboard}
+            onBack={() => navigateTo('debate-mode', 'replace')}
+            onGoDashboard={handleGoToDashboard}
+            onGoDebateMode={() => navigateTo('debate-mode', 'replace')}
             onStartLive={handleDebateConfigured}
             onStartAnalysis={handleDebateConfigured}
           />
@@ -558,6 +587,8 @@ function App() {
           <CompetitionScreen 
             debate={selectedUnifiedDebate} 
             onFinish={handleFinishDebate}
+            dashboardView={competitionDashboardView}
+            onDashboardViewChange={setCompetitionDashboardView}
             onBack={() => handleNavigationWithConfirm(() => navigateTo('debates', 'replace'))}
           />
         ) : selectedAnalysisProject ? (
@@ -565,6 +596,8 @@ function App() {
           <CompetitionScreen 
             project={selectedAnalysisProject} 
             onFinish={handleFinishDebate}
+            dashboardView={competitionDashboardView}
+            onDashboardViewChange={setCompetitionDashboardView}
             onBack={() => handleNavigationWithConfirm(() => navigateTo('debates', 'replace'))}
           />
         ) : (
@@ -609,15 +642,23 @@ function App() {
   };
 
   return (
-    <div className="w-full min-h-screen overflow-y-auto">
+    <div className="w-full min-h-screen overflow-x-hidden overflow-y-auto">
       {renderScreen()}
+
+      {isAppEntryTransitionActive && (
+        <div className="app-entry-transition fixed inset-0 z-[120] pointer-events-none">
+          <div className="app-entry-transition__veil" />
+          <div className="app-entry-transition__core" />
+          <div className="app-entry-transition__ring" />
+        </div>
+      )}
       
       {showDock && (
         <div className="fixed bottom-0 left-0 right-0 z-50 pb-4">
           <Dock
             items={getDockItems()}
-            panelHeight={68}
-            baseItemSize={50}
+            panelHeight={76}
+            baseItemSize={58}
             magnification={60}
           />
         </div>
@@ -626,42 +667,36 @@ function App() {
       {/* Modal de confirmación para salir del debate */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={cancelExit}
-          />
-          <div className="relative w-full max-w-md backdrop-blur-2xl bg-black/40 border border-white/10 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-yellow-400" />
+            <div className="absolute inset-0 bg-black/30" onClick={cancelExit} />
+            <div className="relative w-full max-w-md rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#F0F0EE] p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E6C068]/30">
+                <AlertTriangle className="h-6 w-6 text-[#2C2C2C]" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">Pausar y salir</h3>
-                <p className="text-white/50 text-sm">El debate en vivo quedará congelado</p>
+                <h3 className="text-[30px] leading-none text-[#2C2C2C]">Pausar y salir</h3>
+                <p className="text-sm" style={{ color: 'var(--app-text-muted)' }}>El debate en vivo quedará congelado</p>
               </div>
             </div>
 
-            <p className="text-white/70 mb-6">
+            <p className="mb-6" style={{ color: 'var(--app-text-muted)' }}>
               Si sales ahora, el cronómetro se pausará y podrás continuar este debate después desde Debates Anteriores exactamente donde lo dejaste.
             </p>
 
-            <div className="flex gap-3">
-              <LiquidGlassButton
-                onClick={cancelExit}
-                variant="secondary"
-                className="flex-1"
-              >
-                Cancelar
-              </LiquidGlassButton>
-              
-              <LiquidGlassButton
-                onClick={confirmExit}
-                variant="danger"
-                className="flex-1"
-              >
-                Pausar y salir
-              </LiquidGlassButton>
-            </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelExit}
+                  className="flex-1 rounded-[12px] border border-[#2C2C2C]/20 bg-[#ECECE9] px-4 py-3 text-[20px] text-[#2C2C2C]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmExit}
+                  className="flex-1 rounded-[12px] border-0 bg-[#C44536] px-4 py-3 text-[20px] text-white"
+                >
+                  Pausar y salir
+                </button>
+              </div>
           </div>
         </div>
       )}
@@ -670,3 +705,4 @@ function App() {
 }
 
 export default App;
+
