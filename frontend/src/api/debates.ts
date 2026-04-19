@@ -66,6 +66,15 @@ const resolveDebateMode = (rawMode?: string, persistedMode?: DebateMode, debateC
   return persistedMode || 'analysis';
 };
 
+const normalizeDebateStatus = (rawStatus?: string): DebateStatus => {
+  if (!rawStatus) return 'draft';
+  const normalized = rawStatus.trim().toLowerCase();
+  if (normalized === 'completed' || normalized === 'completado' || normalized === 'finished') return 'completed';
+  if (normalized === 'in_progress' || normalized === 'in progress' || normalized === 'running' || normalized === 'paused') return 'in_progress';
+  if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled';
+  return 'draft';
+};
+
 // Helper para normalizar backend response a tipo Debate
 const normalizeDebate = (backendDebate: BackendDebate): Debate => {
   const createdAtRaw = backendDebate.created_at;
@@ -73,6 +82,9 @@ const normalizeDebate = (backendDebate: BackendDebate): Debate => {
   const debateCode = backendDebate.code || backendDebate.project_code || '';
   const persistedMetadata = loadDebateMetadata(debateCode);
   const normalizedMode = resolveDebateMode(backendDebate.mode, persistedMetadata?.mode, debateCode);
+  const backendStatus = normalizeDebateStatus(backendDebate.status);
+  const normalizedStatus =
+    persistedMetadata?.finished && backendStatus !== 'cancelled' ? 'completed' : backendStatus;
   const normalizedCreatedTs = Number.isFinite(createdAtTime)
     ? createdAtTime
     : persistedMetadata?.created_ts || Date.now();
@@ -95,7 +107,7 @@ const normalizeDebate = (backendDebate: BackendDebate): Debate => {
     team_a_name: backendDebate.team_a_name || 'A favor',
     team_b_name: backendDebate.team_b_name || 'En contra',
     mode: normalizedMode as DebateMode,
-    status: (backendDebate.status as DebateStatus) || 'draft',
+    status: normalizedStatus,
     created_at: normalizedCreatedAt,
     created_ts: normalizedCreatedTs,
   };
@@ -188,6 +200,8 @@ export const debatesService = {
     saveDebateMetadata(createdDebate.code, {
       mode: data.mode,
       created_ts: createdDebate.created_ts || createdTs,
+      finished: false,
+      finished_at: undefined,
     });
     return { ...createdDebate, mode: data.mode };
   },

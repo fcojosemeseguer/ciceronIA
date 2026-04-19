@@ -5,6 +5,8 @@ const METADATA_KEY = 'ciceronia_debate_metadata_v1';
 type DebateMetadata = {
   mode?: DebateMode;
   created_ts?: number;
+  finished?: boolean;
+  finished_at?: string;
 };
 
 type MetadataMap = Record<string, DebateMetadata>;
@@ -42,4 +44,3 @@ export const loadDebateMetadata = (debateCode: string): DebateMetadata | null =>
   const map = readMetadataMap();
   return map[debateCode] || null;
 };
-

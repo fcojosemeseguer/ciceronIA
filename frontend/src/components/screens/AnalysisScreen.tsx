@@ -533,9 +533,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
               </section>
 
               <section className="w-1/2 pl-2">
-                <div className="rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4">
-                  {!selectedPhase && (
-                    <>
+                <div className="relative overflow-hidden rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4 min-h-[660px] lg:min-h-[560px]">
+                  <div
+                    className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      selectedPhase
+                        ? 'pointer-events-none absolute inset-4 translate-x-[-10%] scale-[0.96] opacity-0'
+                        : 'relative translate-x-0 scale-100 opacity-100'
+                    }`}
+                  >
                       <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px]">
                         <div className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-3">
                           <div className="flex items-center justify-between">
@@ -579,13 +584,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                             <button
                               key={`analysis-phase-${phase.key}`}
                               type="button"
-                              onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                              onClick={() => setSelectedPhaseKey(phase.key)}
                               className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
                               style={{
                                 background: phase.hasAnalyzed || phase.isAnalyzing ? teamAColor : '#DADADA',
                                 color: '#fff',
                                 opacity: phase.hasAnalyzed || phase.isAnalyzing ? 1 : 0.45,
-                                cursor: phase.hasAnalyzed ? 'pointer' : 'default',
+                                cursor: 'pointer',
                               }}
                             >
                               {phase.phase}
@@ -599,7 +604,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                               <button
                                 key={`analysis-dot-${phase.key}`}
                                 type="button"
-                                onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                                onClick={() => setSelectedPhaseKey(phase.key)}
                                 className="flex h-5 w-5 items-center justify-center rounded-full border-2 bg-[#F0F0EE] transition-transform hover:scale-110"
                                 style={{ borderColor: phase.hasAnalyzed ? '#3A7D44' : phase.isAnalyzing ? '#E6C068' : '#B8B8B6' }}
                                 title={phase.hasAnalyzed ? 'Analizado' : phase.isAnalyzing ? 'Analizando' : 'Pendiente'}
@@ -620,13 +625,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                             <button
                               key={`analysis-phase-bottom-${phase.key}`}
                               type="button"
-                              onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                              onClick={() => setSelectedPhaseKey(phase.key)}
                               className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
                               style={{
                                 background: phase.hasAnalyzed || phase.isAnalyzing ? teamBColor : '#DADADA',
                                 color: '#fff',
                                 opacity: phase.hasAnalyzed || phase.isAnalyzing ? 1 : 0.45,
-                                cursor: phase.hasAnalyzed ? 'pointer' : 'default',
+                                cursor: 'pointer',
                               }}
                             >
                               {phase.phase}
@@ -634,9 +639,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                           ))}
                         </div>
                       </div>
-                    </>
-                  )}
+                  </div>
 
+                  <div
+                    className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      selectedPhase
+                        ? 'relative translate-x-0 scale-100 opacity-100'
+                        : 'pointer-events-none absolute inset-4 translate-x-[10%] scale-[0.96] opacity-0'
+                    }`}
+                  >
                   {selectedPhase && (
                     <div className="rounded-2xl px-4 py-4 text-white" style={{ background: selectedPhase.team === 'A' ? teamAColor : teamBColor }}>
                       <div className="mb-4 flex items-center justify-between">
@@ -695,12 +706,18 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
 
                         <div className="rounded-2xl bg-white p-3 text-[#2C2C2C]">
                           <p className="text-[22px] leading-tight">
-                            {phaseCriteria[selectedCriterionIndex]?.note || 'Sin anotaciones para esta fase.'}
+                            {phaseCriteria[selectedCriterionIndex]?.note ||
+                              (selectedPhase.hasAnalyzed
+                                ? 'Sin anotaciones para esta fase.'
+                                : selectedPhase.isAnalyzing
+                                ? 'Analizando esta fase... en unos segundos apareceran las metricas.'
+                                : 'Esta fase aun no tiene analisis disponible.')}
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               </section>
             </div>

@@ -20,10 +20,14 @@ import {
 } from 'lucide-react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateHistoryStore } from '../../store/debateHistoryStore';
+import { debatesService } from '../../api/debates';
 import {
   DEBATE_RUBRIC,
   DebateScoringResult,
   DetailedTeamScore,
+  Debate,
+  AnalysisResult,
+  CriterioResult,
   RubricRoundType,
   SpeakerRoundScore,
   TeamPosition,
@@ -33,6 +37,7 @@ import { BrandHeader } from '../common';
 import { loadDebateTeamColors } from '../../utils/debateColors';
 
 interface ScoringScreenProps {
+  debate?: Debate;
   onFinish: () => void;
   onBack: () => void;
 }
@@ -64,13 +69,13 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }) => {
-  const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis, currentDebateCode } = useDebateStore();
+export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, onBack }) => {
+  const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis, currentDebateCode, analysisQueue } = useDebateStore();
   const { addDebate } = useDebateHistoryStore();
-  const analysisResults = getAnalysisResults();
+  const resolvedDebateCode = debate?.code || currentDebateCode || '';
   const persistedColors = useMemo(
-    () => (currentDebateCode ? loadDebateTeamColors(currentDebateCode) : null),
-    [currentDebateCode]
+    () => (resolvedDebateCode ? loadDebateTeamColors(resolvedDebateCode) : null),
+    [resolvedDebateCode]
   );
   const teamAColor = persistedColors?.team_a_color || '#3A6EA5';
   const teamBColor = persistedColors?.team_b_color || '#C44536';
@@ -92,6 +97,8 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     teamConnectionB: 0,
   });
   const [showAnalysisResults, setShowAnalysisResults] = useState(true);
+  const [remoteAnalysisResults, setRemoteAnalysisResults] = useState<AnalysisResult[]>([]);
+  const [isLoadingRemoteAnalysis, setIsLoadingRemoteAnalysis] = useState(false);
 
   useEffect(() => {
     const emptyRoundScores = (teamId: TeamPosition, teamName: string): SpeakerRoundScore[] =>
@@ -149,6 +156,59 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
     setEditableScores(initialEditable);
     setScoringResult(initialResult);
   }, [config, recordings]);
+
+  useEffect(() => {
+    if (!resolvedDebateCode) return;
+    let cancelled = false;
+
+    const hydrateAnalysis = async () => {
+      setIsLoadingRemoteAnalysis(true);
+      try {
+        const response = await debatesService.getDebate(resolvedDebateCode, {
+          include_segments: false,
+          include_metrics: false,
+          include_transcript: false,
+          limit: 80,
+          offset: 0,
+        });
+        if (!cancelled) {
+          setRemoteAnalysisResults(response.analyses || []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('No se pudieron cargar los analisis del debate finalizado', error);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingRemoteAnalysis(false);
+      }
+    };
+
+    hydrateAnalysis();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedDebateCode]);
+
+  const localAnalysisResults = getAnalysisResults();
+  const analysisResults = localAnalysisResults.length > 0 ? localAnalysisResults : remoteAnalysisResults;
+  const hasAnyAnalyzedResult = analysisResults.length > 0;
+  const formatPendingScore = (value: number) =>
+    hasAnyAnalyzedResult || value > 0 || isEditing ? String(value) : 'Analizando...';
+  const getTeamScoreFromResults = (team: TeamPosition) => {
+    const postureNeedle = team === 'A' ? 'favor' : 'contra';
+    const teamResults = analysisResults.filter((result) => result.postura.toLowerCase().includes(postureNeedle));
+    if (!teamResults.length) return getTeamScoreFromAnalysis(team);
+    const average = teamResults.reduce((sum, result) => sum + result.total, 0) / teamResults.length;
+    return Math.round(average);
+  };
+  const analysisTotalSegments = Math.max(recordings.length, analysisQueue.length, analysisResults.length);
+  const analysisCompletedSegments = Math.max(
+    analysisResults.length,
+    analysisQueue.filter((item) => item.status === 'completed').length
+  );
+  const analysisPendingSegments = Math.max(0, analysisTotalSegments - analysisCompletedSegments);
+  const shouldShowAnalysisProgress =
+    analysisTotalSegments > 0 && (analysisPendingSegments > 0 || isLoadingRemoteAnalysis);
 
   const calculateTeamTotal = (roundScores: SpeakerRoundScore[], connectionScore: number) =>
     roundScores.reduce((sum, round) => sum + round.criterionScores.reduce((cSum, criterion) => cSum + criterion.score, 0), 0) + connectionScore;
@@ -307,7 +367,9 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
         </div>
 
         <section className="mb-6 rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-5 py-6">
-          <h2 className="mb-4 text-center text-[30px] leading-none text-[#2C2C2C] sm:text-[36px]">{scoringResult.topic}</h2>
+          <h2 className="mb-4 text-center text-[30px] leading-none text-[#2C2C2C] sm:text-[36px]">
+            {debate?.debate_topic || scoringResult.topic}
+          </h2>
 
           {analysisResults.length > 0 && (
             <div className="mb-5 flex justify-center gap-2">
@@ -332,30 +394,43 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
             </div>
           )}
 
+          {shouldShowAnalysisProgress && (
+            <div className="mb-5 rounded-xl border border-[#E6C068]/60 bg-[#E6C068]/20 px-4 py-3 text-[#2C2C2C]">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>
+                  {analysisCompletedSegments > 0
+                    ? `Analizando intervenciones... ${analysisCompletedSegments}/${analysisTotalSegments} completadas`
+                    : 'Analizando intervenciones...'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {showAnalysisResults && analysisResults.length > 0 ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div
-                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromAnalysis('A') <= getTeamScoreFromAnalysis('B') ? 'border-[#CFCFCD] bg-white' : ''}`}
+                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromResults('A') <= getTeamScoreFromResults('B') ? 'border-[#CFCFCD] bg-white' : ''}`}
                   style={
-                    getTeamScoreFromAnalysis('A') > getTeamScoreFromAnalysis('B')
+                    getTeamScoreFromResults('A') > getTeamScoreFromResults('B')
                       ? { borderColor: hexToRgba(teamAColor, 0.6), background: hexToRgba(teamAColor, 0.12) }
                       : undefined
                   }
                 >
                   <p className="text-sm font-medium" style={{ color: teamAColor }}>{scoringResult.teamAName}</p>
-                  <p className="text-3xl font-bold text-[#2C2C2C]">{getTeamScoreFromAnalysis('A')}</p>
+                  <p className="text-3xl font-bold text-[#2C2C2C]">{formatPendingScore(getTeamScoreFromResults('A'))}</p>
                 </div>
                 <div
-                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromAnalysis('B') <= getTeamScoreFromAnalysis('A') ? 'border-[#CFCFCD] bg-white' : ''}`}
+                  className={`rounded-xl border-2 p-4 ${getTeamScoreFromResults('B') <= getTeamScoreFromResults('A') ? 'border-[#CFCFCD] bg-white' : ''}`}
                   style={
-                    getTeamScoreFromAnalysis('B') > getTeamScoreFromAnalysis('A')
+                    getTeamScoreFromResults('B') > getTeamScoreFromResults('A')
                       ? { borderColor: hexToRgba(teamBColor, 0.7), background: hexToRgba(teamBColor, 0.12) }
                       : undefined
                   }
                 >
                   <p className="text-sm font-medium" style={{ color: teamBColor }}>{scoringResult.teamBName}</p>
-                  <p className="text-3xl font-bold text-[#2C2C2C]">{getTeamScoreFromAnalysis('B')}</p>
+                  <p className="text-3xl font-bold text-[#2C2C2C]">{formatPendingScore(getTeamScoreFromResults('B'))}</p>
                 </div>
               </div>
 
@@ -373,7 +448,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {result.criterios.map((criterion, cIndex) => (
+                    {result.criterios.map((criterion: CriterioResult, cIndex: number) => (
                       <div key={`criterion-${index}-${cIndex}`} className="flex items-center justify-between rounded bg-[#F5F5F3] px-2 py-1 text-sm">
                         <span className="mr-2 truncate text-[#5E5E5E]">{criterion.criterio}</span>
                         <span className={getScoreColorClass(criterion.nota)}>{criterion.nota}</span>
@@ -382,6 +457,19 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                   </div>
                 </div>
               ))}
+
+              {analysisPendingSegments > 0 &&
+                Array.from({ length: Math.min(analysisPendingSegments, 4) }).map((_, index) => (
+                  <div
+                    key={`analysis-pending-${index}`}
+                    className="rounded-xl border border-[#CFCFCD] bg-white p-3 text-[#5E5E5E]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Analizando intervención...
+                    </div>
+                  </div>
+                ))}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -394,7 +482,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                 }
               >
                 <p className="text-sm font-medium" style={{ color: teamAColor }}>{scoringResult.teamAName}</p>
-                <p className="text-3xl font-bold text-[#2C2C2C]">{scoringResult.teamAScore.totalScore}</p>
+                <p className="text-3xl font-bold text-[#2C2C2C]">{formatPendingScore(scoringResult.teamAScore.totalScore)}</p>
               </div>
               <div
                 className={`rounded-xl border-2 p-4 ${scoringResult.winner !== 'B' ? 'border-[#CFCFCD] bg-white' : ''}`}
@@ -405,7 +493,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                 }
               >
                 <p className="text-sm font-medium" style={{ color: teamBColor }}>{scoringResult.teamBName}</p>
-                <p className="text-3xl font-bold text-[#2C2C2C]">{scoringResult.teamBScore.totalScore}</p>
+                <p className="text-3xl font-bold text-[#2C2C2C]">{formatPendingScore(scoringResult.teamBScore.totalScore)}</p>
               </div>
             </div>
           )}
@@ -461,7 +549,9 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                                 </div>
                               ) : (
                                 <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(scoreA)}`}>
-                                  <span className={`font-bold ${getScoreColorClass(scoreA)}`}>{scoreA}</span>
+                                  <span className={`font-bold ${getScoreColorClass(scoreA)}`}>
+                                    {hasAnyAnalyzedResult || scoreA > 0 ? scoreA : '—'}
+                                  </span>
                                   <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
                                 </div>
                               )}
@@ -484,7 +574,9 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                                 </div>
                               ) : (
                                 <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(scoreB)}`}>
-                                  <span className={`font-bold ${getScoreColorClass(scoreB)}`}>{scoreB}</span>
+                                  <span className={`font-bold ${getScoreColorClass(scoreB)}`}>
+                                    {hasAnyAnalyzedResult || scoreB > 0 ? scoreB : '—'}
+                                  </span>
                                   <span className="text-sm text-[#8A8A8A]">/ {criterion.maxScore}</span>
                                 </div>
                               )}
@@ -526,7 +618,9 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ onFinish, onBack }
                     />
                   ) : (
                     <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getScoreBadgeClass(connection)}`}>
-                      <span className={getScoreColorClass(connection)}>{connection}</span>
+                      <span className={getScoreColorClass(connection)}>
+                        {hasAnyAnalyzedResult || connection > 0 ? connection : '—'}
+                      </span>
                       <span className="text-[#8A8A8A]">/4</span>
                     </div>
                   )}

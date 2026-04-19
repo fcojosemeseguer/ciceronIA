@@ -1,5 +1,5 @@
 /* App CSS - Estilos globales generales
-   Los estilos principales están en index.css */
+   Los estilos principales estÃ¡n en index.css */
 
 * {
   box-sizing: border-box;
@@ -16,20 +16,26 @@ body,
 
 .app-entry-transition {
   overflow: hidden;
+  backdrop-filter: none;
 }
 
 .app-entry-transition__veil {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 20% 22%, rgba(0, 229, 255, 0.22), transparent 34%),
-    radial-gradient(circle at 78% 28%, rgba(255, 107, 0, 0.2), transparent 35%),
-    rgba(2, 6, 23, 0.72);
-  backdrop-filter: blur(14px);
-  animation: app-entry-veil 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  background: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0) 72%);
+  animation: app-entry-fade-veil 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .app-entry-transition__core {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.08);
+  transform-origin: 50% 50%;
+  animation: app-entry-fade-core 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.app-entry-transition__ring {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -37,30 +43,18 @@ body,
   height: 18vmax;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.95) 0%, rgba(255,255,255,0.18) 46%, rgba(255,255,255,0) 72%);
-  filter: blur(0.6px);
-  animation: app-entry-core 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 0 22px rgba(255, 255, 255, 0.2),
+    inset 0 0 10px rgba(255, 255, 255, 0.14);
+  animation: app-entry-fade-ring 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-.app-entry-transition__ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10vmax;
-  height: 10vmax;
-  transform: translate(-50%, -50%);
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 0 48px rgba(255, 255, 255, 0.28), inset 0 0 30px rgba(255, 255, 255, 0.2);
-  animation: app-entry-ring 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes app-entry-veil {
+@keyframes app-entry-fade-veil {
   0% {
     opacity: 0;
   }
-  20% {
+  22% {
     opacity: 1;
   }
   100% {
@@ -68,33 +62,35 @@ body,
   }
 }
 
-@keyframes app-entry-core {
+@keyframes app-entry-fade-core {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.35);
+    transform: scale(1);
+    filter: blur(0px);
   }
-  24% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(0.9);
+  42% {
+    opacity: 0.5;
+    transform: scale(0.985);
+    filter: blur(4px);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(2.7);
+    transform: scale(1.01);
+    filter: blur(0px);
   }
 }
 
-@keyframes app-entry-ring {
+@keyframes app-entry-fade-ring {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.5);
+    transform: translate(-50%, -50%) scale(0.96);
   }
-  28% {
-    opacity: 0.9;
+  45% {
+    opacity: 0.7;
     transform: translate(-50%, -50%) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(3.1);
+    transform: translate(-50%, -50%) scale(1.04);
   }
 }
-

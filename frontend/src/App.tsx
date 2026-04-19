@@ -37,6 +37,7 @@ import { clearAnalysisDraft, saveAnalysisDraft } from './utils/debatePersistence
 import { loadDebateTeamColors } from './utils/debateColors';
 import { initThemeSync } from './utils/theme';
 import { debatesService } from './api';
+import { saveDebateMetadata } from './utils/debateMetadata';
 import backIcon from './assets/icons/icon-back.svg';
 import leftIcon from './assets/icons/icon-left.svg';
 import dashboardIcon from './assets/icons/icon-dashboard.svg';
@@ -82,6 +83,7 @@ function App() {
   const {
     currentDebate: selectedUnifiedDebate,
     selectDebate: selectUnifiedDebate,
+    updateDebate: updateUnifiedDebate,
   } = useUnifiedDebateStore();
   const [configMode, setConfigMode] = useState<DebateMode>('live');
   
@@ -172,7 +174,12 @@ function App() {
     if (redirectTo) {
       setPendingRedirectAfterAuth(redirectTo);
     }
-    navigateTo('auth');
+    const goAuth = () => navigateTo('auth');
+    if (currentScreen === 'landing' && !isAppEntryTransitionActive) {
+      runAppEntryTransition(goAuth);
+      return;
+    }
+    goAuth();
   };
 
   // NUEVOS HANDLERS - Flujo simplificado
@@ -209,11 +216,16 @@ function App() {
     const savedColors = loadDebateTeamColors(debate.code);
     const debateWithColors = savedColors ? { ...debate, ...savedColors } : debate;
     const persistedLiveSession = loadLiveDebateSession(debate.code);
+    const isCompleted = debate.status.trim().toLowerCase() === 'completed';
     const resolvedDebate = persistedLiveSession
-      ? { ...debateWithColors, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+      ? { ...debateWithColors, mode: 'live' as const, status: isCompleted ? 'completed' as const : 'in_progress' as const }
       : debateWithColors;
 
     selectUnifiedDebate(resolvedDebate);
+    if (resolvedDebate.mode === 'live' && resolvedDebate.status === 'completed') {
+      navigateTo('scoring');
+      return;
+    }
     if (resolvedDebate.status === 'draft' || resolvedDebate.status === 'in_progress') {
       navigateTo(resolvedDebate.mode === 'live' ? 'competition' : 'analysis');
       return;
@@ -225,12 +237,14 @@ function App() {
     const savedColors = loadDebateTeamColors(debate.code);
     const debateWithColors = savedColors ? { ...debate, ...savedColors } : debate;
     const persistedLiveSession = loadLiveDebateSession(debate.code);
-    selectUnifiedDebate(
+    const isCompleted = debate.status.trim().toLowerCase() === 'completed';
+    const resolvedDebate = (
       persistedLiveSession
-        ? { ...debateWithColors, mode: 'live' as const, status: debate.status === 'completed' ? debate.status : 'in_progress' as const }
+        ? { ...debateWithColors, mode: 'live' as const, status: isCompleted ? 'completed' as const : 'in_progress' as const }
         : debateWithColors
     );
-    navigateTo('debate-view');
+    selectUnifiedDebate(resolvedDebate);
+    navigateTo('scoring');
   };
 
   // LEGACY HANDLERS (mantener durante transición)
@@ -375,10 +389,10 @@ function App() {
     setIsAppEntryTransitionActive(true);
     window.setTimeout(() => {
       navigate();
-    }, 220);
+    }, 180);
     window.setTimeout(() => {
       setIsAppEntryTransitionActive(false);
-    }, 900);
+    }, 620);
   };
 
   const handleStartDebateFromLanding = () => {
@@ -388,6 +402,12 @@ function App() {
       } else {
         handleGoToAuth('dashboard');
       }
+    });
+  };
+
+  const handleLoginFromLanding = () => {
+    runAppEntryTransition(() => {
+      handleGoToAuth('dashboard');
     });
   };
 
@@ -418,7 +438,24 @@ function App() {
   };
 
   const handleStartDebate = () => navigateTo('competition');
-  const handleFinishDebate = () => navigateTo('scoring');
+  const handleFinishDebate = async () => {
+    const debateCode = selectedUnifiedDebate?.code;
+    if (debateCode) {
+      const completedAt = new Date().toISOString();
+      saveDebateMetadata(debateCode, { finished: true, finished_at: completedAt });
+      try {
+        await updateUnifiedDebate(debateCode, { status: 'completed', completed_at: completedAt });
+      } catch (error) {
+        console.error('No se pudo actualizar el estado del debate al finalizar', error);
+      }
+      selectUnifiedDebate({
+        ...selectedUnifiedDebate,
+        status: 'completed',
+        completed_at: completedAt,
+      });
+    }
+    navigateTo('scoring');
+  };
   const handleFinishScoring = () => navigateTo('dashboard');
 
   const { state: debateState, pauseDebate } = useDebateStore();
@@ -538,7 +575,7 @@ function App() {
         return (
           <LandingPage 
             onStartDebate={handleStartDebateFromLanding} 
-            onLogin={() => handleGoToAuth('dashboard')} 
+            onLogin={handleLoginFromLanding} 
             onOpenSettings={isAuthenticated ? handleGoToSettings : undefined}
           />
         );
@@ -697,7 +734,7 @@ function App() {
         );
 
       case 'scoring':
-        return <ScoringScreen onFinish={handleFinishScoring} onBack={handleGoToDashboard} />;
+        return <ScoringScreen debate={selectedUnifiedDebate || undefined} onFinish={handleFinishScoring} onBack={handleGoToDashboard} />;
 
       case 'debate-details':
         return selectedDebate ? (
@@ -719,11 +756,11 @@ function App() {
             }}
           />
         ) : (
-          <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />
+          <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={handleLoginFromLanding} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />
         );
 
       default:
-        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={() => handleGoToAuth('dashboard')} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />;
+        return <LandingPage onStartDebate={handleStartDebateFromLanding} onLogin={handleLoginFromLanding} onOpenSettings={isAuthenticated ? handleGoToSettings : undefined} />;
     }
   };
 

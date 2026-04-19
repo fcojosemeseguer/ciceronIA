@@ -8,6 +8,7 @@ import {
   Calendar,
   Trash2,
   ArrowRight,
+  Play,
 } from 'lucide-react';
 import { useUnifiedDebateStore } from '../../store';
 import { Debate } from '../../types';
@@ -16,8 +17,8 @@ import liveIcon from '../../assets/icons/icon-envivo.svg';
 import analysisIcon from '../../assets/icons/icon-audioanalisis.svg';
 
 interface DebatesScreenProps {
-  onSelectDebate: (debate: Debate) => void;
-  onViewDebateDetails?: (debate: Debate) => void;
+  onSelectDebate: (debate: Debate) => void; // Continuar (solo no finalizados)
+  onViewDebateDetails?: (debate: Debate) => void; // Abrir evaluacion
   onBack: () => void;
 }
 
@@ -85,7 +86,11 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
     });
   };
 
-  const isContinuable = (debate: Debate) => debate.status === 'draft' || debate.status === 'in_progress';
+  const normalizeStatus = (status?: string) => (status || '').trim().toLowerCase();
+  const isContinuable = (debate: Debate) => {
+    const normalized = normalizeStatus(debate.status);
+    return normalized === 'draft' || normalized === 'in_progress';
+  };
 
   const handleViewRatings = (debate: Debate) => {
     (onViewDebateDetails || onSelectDebate)(debate);
@@ -196,13 +201,25 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
                         {formatDate(debate.created_at)}
                       </span>
                       <button
-                        onClick={() => (isContinuable(debate) ? onSelectDebate(debate) : handleViewRatings(debate))}
+                        onClick={() => handleViewRatings(debate)}
                         className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#2C2C2C] hover:bg-[#2C2C2C]/8"
-                        aria-label="Abrir debate"
+                        aria-label="Abrir evaluacion"
                       >
                         <ArrowRight className="h-7 w-7" />
                       </button>
                     </div>
+                    {isContinuable(debate) && (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          onClick={() => onSelectDebate(debate)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-[#3A7D44]/35 bg-[#3A7D44]/15 px-3 py-1.5 text-[14px] font-medium text-[#2C2C2C]"
+                          aria-label="Continuar debate"
+                        >
+                          <Play className="h-4 w-4 fill-current" />
+                          Continuar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

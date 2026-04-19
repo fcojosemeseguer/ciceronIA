@@ -162,14 +162,6 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
     if (audioError) setRecordingError(audioError);
   }, [audioError]);
 
-  if (!debateData) {
-    return (
-      <div className="app-shell flex min-h-screen items-center justify-center">
-        <div className="app-text-muted">Error: No se proporciono debate ni proyecto</div>
-      </div>
-    );
-  }
-
   const teamAName = debate?.team_a_name || project?.team_a_name || getTeamName('A');
   const teamBName = debate?.team_b_name || project?.team_b_name || getTeamName('B');
   const debateName = (debate?.name && debate.name.trim()) || (project?.name && project.name.trim()) || 'Debate en vivo';
@@ -200,12 +192,14 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   const phaseMetrics: PhaseMetric[] = roundsWithMeta.map((roundMeta) => {
     const phaseResults = analysisResults.filter((result) => {
       const samePhase = normalizeKey(result.fase) === normalizeKey(roundMeta.roundType);
-      const posture = result.postura.trim().toLowerCase();
+      const posture = normalizeKey(result.postura);
+      const teamANameKey = normalizeKey(teamAName);
+      const teamBNameKey = normalizeKey(teamBName);
       const matchesTeam =
         (roundMeta.team === 'A' &&
-          (posture.includes('favor') || posture === teamAName.trim().toLowerCase())) ||
+          (posture.includes('favor') || posture === 'a favor' || posture === teamANameKey)) ||
         (roundMeta.team === 'B' &&
-          (posture.includes('contra') || posture === teamBName.trim().toLowerCase()));
+          (posture.includes('contra') || posture === 'en contra' || posture === teamBNameKey));
       return samePhase && matchesTeam;
     });
     const roundRecordingIds = recordings
@@ -308,6 +302,11 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
 
   return (
     <div className="app-shell min-h-screen overflow-y-auto pb-28">
+      {!debateData ? (
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="app-text-muted">Error: No se proporcionó debate ni proyecto</div>
+        </div>
+      ) : (
       <div className="mx-auto w-full max-w-[1240px] px-5 py-8 sm:px-8">
         <BrandHeader className="mb-7" />
         <h1 className="mb-7 text-center text-[48px] leading-none text-[#2C2C2C] sm:text-[64px]">{debateName}</h1>
@@ -391,9 +390,14 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
             </section>
 
             <section className="w-1/2 pl-2">
-              <div className="rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4">
-                {!selectedPhase && (
-                  <>
+              <div className="relative overflow-hidden rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4 min-h-[660px] lg:min-h-[560px]">
+                <div
+                  className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    selectedPhase
+                      ? 'pointer-events-none absolute inset-4 translate-x-[-10%] scale-[0.96] opacity-0'
+                      : 'relative translate-x-0 scale-100 opacity-100'
+                  }`}
+                >
                     <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px]">
                       <div className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-3">
                         <div className="flex items-center justify-between">
@@ -441,13 +445,13 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
                           <button
                             key={`top-${phase.key}`}
                             type="button"
-                            onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                            onClick={() => setSelectedPhaseKey(phase.key)}
                             className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
                             style={{
                               background: isReached ? teamColor : '#DADADA',
                               color: '#fff',
                               opacity: isReached ? 1 : 0.45,
-                              cursor: phase.hasAnalyzed ? 'pointer' : 'default',
+                              cursor: isReached ? 'pointer' : 'default',
                             }}
                           >
                             {phase.phase}
@@ -462,12 +466,12 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
                             <button
                               key={`status-${phase.key}`}
                               type="button"
-                              onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                              onClick={() => setSelectedPhaseKey(phase.key)}
                               className="flex h-6 w-6 items-center justify-center rounded-full border-2 bg-[#F0F0EE] transition-transform hover:scale-110"
                               style={{
                                 borderColor: phase.hasAnalyzed ? '#3A7D44' : phase.isCurrent ? '#E6C068' : '#B8B8B6',
                                 boxShadow: phase.isCurrent ? '0 0 0 3px rgba(230,192,104,0.28)' : 'none',
-                                cursor: phase.hasAnalyzed ? 'pointer' : 'default',
+                                cursor: 'pointer',
                               }}
                               title={phase.hasAnalyzed ? 'Analizado' : phase.isCurrent ? 'Analizando' : 'Pendiente'}
                             >
@@ -490,13 +494,13 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
                           <button
                             key={`bottom-${phase.key}`}
                             type="button"
-                            onClick={() => phase.hasAnalyzed && setSelectedPhaseKey(phase.key)}
+                            onClick={() => setSelectedPhaseKey(phase.key)}
                             className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
                             style={{
                               background: isReached ? teamColor : '#DADADA',
                               color: '#fff',
                               opacity: isReached ? 1 : 0.45,
-                              cursor: phase.hasAnalyzed ? 'pointer' : 'default',
+                              cursor: isReached ? 'pointer' : 'default',
                             }}
                           >
                             {phase.phase}
@@ -504,9 +508,15 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
                         )})}
                       </div>
                     </div>
-                  </>
-                )}
+                </div>
 
+                <div
+                  className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    selectedPhase
+                      ? 'relative translate-x-0 scale-100 opacity-100'
+                      : 'pointer-events-none absolute inset-4 translate-x-[10%] scale-[0.96] opacity-0'
+                  }`}
+                >
                 {selectedPhase && (
                   <div className="rounded-2xl px-4 py-4 text-white" style={{ background: selectedPhase.team === 'A' ? teamAColor : teamBColor }}>
                     <div className="mb-4 flex items-center justify-between">
@@ -563,14 +573,20 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
                         </div>
                       </div>
 
-                      <div className="rounded-2xl bg-white p-3 text-[#2C2C2C]">
-                        <p className="text-[22px] leading-tight">
-                          {phaseCriteria[selectedCriterionIndex]?.note || 'Sin anotaciones para esta fase.'}
-                        </p>
+                        <div className="rounded-2xl bg-white p-3 text-[#2C2C2C]">
+                          <p className="text-[22px] leading-tight">
+                            {phaseCriteria[selectedCriterionIndex]?.note ||
+                              (selectedPhase.hasAnalyzed
+                                ? 'Sin anotaciones para esta fase.'
+                                : selectedPhase.isAnalyzing
+                                ? 'Analizando esta fase... en unos segundos apareceran las metricas.'
+                                : 'Esta fase aun no tiene analisis disponible.')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
                   </div>
                 )}
+                </div>
               </div>
             </section>
           </div>
@@ -594,6 +610,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {(recordingError || audioError) && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-30 w-[min(680px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-red-500/30 bg-red-500/12 px-4 py-3 text-sm text-red-200">

@@ -28,7 +28,7 @@
   --glass-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
   --action-icon: #0f172a;
   --action-glow: rgba(15, 23, 42, 0.22);
-  --brand-font: 'Dalek Pinpoint', 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --brand-font: 'Dalek Pinpoint', 'Inter', 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
 }
 
 :root[data-theme='apple'] {
@@ -189,6 +189,17 @@ body {
   background: var(--app-bg-solid);
   color: var(--app-text);
   -webkit-tap-highlight-color: transparent;
+}
+
+.landing-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.landing-scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 #root {
@@ -462,6 +473,7 @@ textarea:focus {
 
 .brand-wordmark {
   font-family: var(--brand-font);
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
