@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.endpoints import router as routerv1
 from app.api.v2.endpoints import router as routerv2
+from app.core.request_logging import register_request_logging_middleware
 
 app = FastAPI(title="CiceronAI")
 app.include_router(routerv1, prefix="/api/v1")
@@ -14,6 +15,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],      # Permite todos los encabezados
 )
+
+register_request_logging_middleware(app)
 
 
 @app.get("/")
