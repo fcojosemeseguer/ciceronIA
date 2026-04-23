@@ -17,6 +17,8 @@ interface ShareLinksResponse {
   total: number;
 }
 
+const PUBLIC_DASHBOARD_BASE_URL = 'https://ciceronapi.n0.nu';
+
 export const dashboardService = {
   async createShareLink(
     projectCode: string,
@@ -32,9 +34,8 @@ export const dashboardService = {
     );
 
     const token = response.data.public_url.split('/').pop() || '';
-    const appBase = process.env.REACT_APP_PUBLIC_APP_URL || window.location.origin;
     const frontendPublicUrl = token
-      ? `${appBase.replace(/\/$/, '')}/public/dashboard/${encodeURIComponent(token)}`
+      ? `${PUBLIC_DASHBOARD_BASE_URL.replace(/\/$/, '')}/public/dashboard/${encodeURIComponent(token)}`
       : undefined;
 
     return {

@@ -1,18 +1,32 @@
 /**
- * AnalysisScreen - Analisis de audios con vista carrusel y dashboard.
+ * AnalysisScreen - Análisis de audios con layout fijo y dashboard compartido.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Play, BarChart3, Loader2, Users } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, BarChart3, Loader2, Play, Users } from 'lucide-react';
 import { debatesService } from '../../api';
 import { useProjectStore, useAnalysisStore } from '../../store';
-import { AudioUpload, Project, DebateType, Debate, AnalysisResult } from '../../types';
+import {
+  AudioUpload,
+  Debate,
+  DebateType,
+  AnalysisResult,
+  Project,
+  ProjectDashboardResponse,
+} from '../../types';
 import { BrandHeader, LiquidGlassButton, AudioDropZone } from '../common';
+import EmbeddedDebateDashboard from '../common/EmbeddedDebateDashboard';
 import { clearAnalysisDraft, loadAnalysisDraft, saveAnalysisDraft } from '../../utils/debatePersistence';
 import { loadDebateTeamColors } from '../../utils/debateColors';
 import { normalizePhaseName } from '../../utils/roundsSequence';
-import checkIcon from '../../assets/icons/icon-check.svg';
-import loaderIcon from '../../assets/icons/icon-loader-lines-alt.svg';
+import {
+  averageScore,
+  buildDurationLookup,
+  DashboardSlot,
+  getDashboardSlotKey,
+  mergeCriteriaNotes,
+} from '../../utils/dashboardViewModel';
+import { useDashboardShareLink } from '../../hooks/useDashboardShareLink';
 
 interface AnalysisScreenProps {
   project?: Project;
@@ -31,9 +45,12 @@ const getSlotKey = (faseNombre: string, postura: string) =>
 
 const getPostureCardTone = (postura: string, teamAColor: string, teamBColor: string) => {
   const normalized = postura.trim().toLowerCase();
-  return normalized.includes('favor')
-    ? { borderColor: `${teamAColor}40`, background: teamAColor }
-    : { borderColor: `${teamBColor}40`, background: teamBColor };
+  const baseColor = normalized.includes('favor') ? teamAColor : teamBColor;
+
+  return {
+    borderColor: `${baseColor}55`,
+    background: `${baseColor}1A`,
+  };
 };
 
 const buildUploadsFromProgress = (
@@ -121,8 +138,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   const [numOradores, setNumOradores] = useState(1);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [localDashboardView, setLocalDashboardView] = useState(false);
-  const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
-  const [selectedCriterionIndex, setSelectedCriterionIndex] = useState(0);
+  const [dashboardData, setDashboardData] = useState<ProjectDashboardResponse | undefined>(undefined);
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
+  const [selectedCriterionId, setSelectedCriterionId] = useState<string | null>(null);
+  const autoOpenedSlotRef = useRef<string | null>(null);
   const isDashboardView = dashboardView ?? localDashboardView;
   const setDashboardView = onDashboardViewChange ?? setLocalDashboardView;
 
@@ -135,7 +154,20 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   }, [debateCode]);
   const teamAColor = debate?.team_a_color || persistedColors?.team_a_color || '#3A6EA5';
   const teamBColor = debate?.team_b_color || persistedColors?.team_b_color || '#C44536';
-  const fallbackPosturas = [debateData?.team_a_name || 'A favor', debateData?.team_b_name || 'En contra'];
+  const fallbackTeamAName = debateData?.team_a_name || 'A favor';
+  const fallbackTeamBName = debateData?.team_b_name || 'En contra';
+  const fallbackPosturas = useMemo(
+    () => [fallbackTeamAName, fallbackTeamBName],
+    [fallbackTeamAName, fallbackTeamBName]
+  );
+
+  const {
+    shareState,
+    createShareLink,
+    copyShareLink,
+    openShareLink,
+    dismissShareLink,
+  } = useDashboardShareLink(debateCode);
 
   useEffect(() => {
     if (debateTypes.length === 0) fetchDebateTypes();
@@ -156,10 +188,18 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     const hydrateUploads = async () => {
       const draftUploads = loadAnalysisDraft(debateCode) as AudioUpload[];
       let analyses: AnalysisResult[] = [];
+      let nextDashboard: ProjectDashboardResponse | undefined;
 
       try {
-        const response = await debatesService.getDebate(debateCode);
+        const response = await debatesService.getDebate(debateCode, {
+          include_segments: true,
+          include_metrics: false,
+          include_transcript: false,
+          limit: 100,
+          offset: 0,
+        });
         analyses = response.analyses || [];
+        nextDashboard = response.dashboard;
       } catch (error) {
         console.error('No se pudo reconstruir el progreso del analisis', error);
       }
@@ -174,15 +214,50 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
         fallbackPosturas
       );
       replaceUploads(hydratedUploads);
+      setDashboardData(nextDashboard);
+
       const restoredSpeakerCount = hydratedUploads.find((upload) => upload.numOradores > 1)?.numOradores;
       if (restoredSpeakerCount) setNumOradores(restoredSpeakerCount);
     };
 
-    hydrateUploads();
+    void hydrateUploads();
     return () => {
       cancelled = true;
     };
-  }, [debateCode, replaceUploads, selectedDebateType, fallbackPosturas[0], fallbackPosturas[1]]);
+  }, [debateCode, replaceUploads, selectedDebateType, fallbackPosturas]);
+
+  const completedCount = getCompletedCount();
+
+  useEffect(() => {
+    if (!debateCode) return;
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      try {
+        const response = await debatesService.getDebate(debateCode, {
+          include_segments: true,
+          include_metrics: false,
+          include_transcript: false,
+          limit: 100,
+          offset: 0,
+        });
+
+        if (!cancelled) {
+          setDashboardData(response.dashboard);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('No se pudo refrescar el dashboard del analisis', error);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debateCode, completedCount]);
 
   useEffect(() => {
     if (!debateCode || uploads.length === 0) return;
@@ -212,7 +287,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   };
 
   const handleMinutoOroChange = (uploadId: string, value: boolean) => {
-    const upload = uploads.find((u) => u.id === uploadId);
+    const upload = uploads.find((item) => item.id === uploadId);
     if (!upload) return;
     updateUploadStatus(uploadId, upload.status, { minutoOroUtilizado: value });
   };
@@ -222,13 +297,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
     field: 'preguntasRealizadas' | 'preguntasRespondidas',
     value: number
   ) => {
-    const upload = uploads.find((u) => u.id === uploadId);
+    const upload = uploads.find((item) => item.id === uploadId);
     if (!upload) return;
     updateUploadStatus(uploadId, upload.status, { [field]: value });
   };
 
   const handleNumOradoresChange = (uploadId: string, value: number) => {
-    const upload = uploads.find((u) => u.id === uploadId);
+    const upload = uploads.find((item) => item.id === uploadId);
     if (!upload) return;
     updateUploadStatus(uploadId, upload.status, { numOradores: value });
   };
@@ -244,7 +319,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   };
 
   const handleRetryUpload = (uploadId: string) => {
-    const upload = uploads.find((u) => u.id === uploadId);
+    const upload = uploads.find((item) => item.id === uploadId);
     if (upload && debateData) analyseAudio(uploadId, debateData as Project, selectedDebateType);
   };
 
@@ -260,9 +335,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
         : fallbackPosturas;
 
     return selectedDebateType.fases.map((fase) => {
-      const byFase = uploads.filter((u) => u.faseId === fase.id);
+      const byFase = uploads.filter((upload) => upload.faseId === fase.id);
       const completed = posturas.map((postura) => {
-        const existing = byFase.find((upload) => getSlotKey(upload.faseNombre, upload.postura) === getSlotKey(fase.nombre, postura));
+        const existing = byFase.find(
+          (upload) =>
+            getSlotKey(upload.faseNombre, upload.postura) === getSlotKey(fase.nombre, postura)
+        );
         if (existing) return existing;
         return {
           id: createUploadId(debateCode, fase.id, postura),
@@ -276,148 +354,145 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
       });
       return { fase, uploads: completed };
     });
-  }, [selectedDebateType, uploads, debateCode, fallbackPosturas[0], fallbackPosturas[1]]);
+  }, [selectedDebateType, uploads, debateCode, fallbackPosturas]);
 
-  const completedCount = getCompletedCount();
   const totalCount = getTotalCount();
-  const hasPendingUploads = uploads.some((u) => u.file && u.status === 'pending');
+  const hasPendingUploads = uploads.some((upload) => upload.file && upload.status === 'pending');
   const allCompleted = totalCount > 0 && completedCount === totalCount;
 
-  const completedResults = uploads
-    .map((upload) => upload.result)
-    .filter((result): result is AnalysisResult => Boolean(result));
-  const teamAScorePercent = completedResults
-    .filter((result) => result.postura.toLowerCase().includes('favor'))
-    .reduce((sum, result, _, arr) => {
-      const value = result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100;
-      return sum + value / Math.max(1, arr.length);
-    }, 0);
-  const teamBScorePercent = completedResults
-    .filter((result) => result.postura.toLowerCase().includes('contra'))
-    .reduce((sum, result, _, arr) => {
-      const value = result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100;
-      return sum + value / Math.max(1, arr.length);
-    }, 0);
-  const teamAScore40 = Math.round((teamAScorePercent / 100) * 40);
-  const teamBScore40 = Math.round((teamBScorePercent / 100) * 40);
-  const timelineSlots = uploadsByFase.flatMap(({ fase, uploads: faseUploads }, faseIdx) =>
-    faseUploads.map((upload, slotIdx) => {
-      const team: 'A' | 'B' = upload.postura.toLowerCase().includes('favor') ? 'A' : 'B';
-      const status = upload.status;
-      const hasAnalyzed = status === 'completed' && !!upload.result;
-      const isAnalyzing = status === 'analyzing';
-      const slotResults = upload.result
-        ? [upload.result]
-        : completedResults.filter(
-            (result) =>
-              normalizePhaseName(result.fase) === normalizePhaseName(upload.faseNombre) &&
-              result.postura.trim().toLowerCase() === upload.postura.trim().toLowerCase()
-          );
-      const avg = slotResults.length
-        ? slotResults.reduce((sum, result) => sum + (result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100), 0) / slotResults.length
-        : 0;
-      return {
-        key: `${normalizePhaseName(upload.faseNombre)}::${upload.postura.trim().toLowerCase()}::${faseIdx}-${slotIdx}`,
-        phase: upload.faseNombre,
-        team,
-        avg,
-        hasAnalyzed,
-        isAnalyzing,
-        isCurrent: false,
-        results: slotResults,
-        slotOrder: faseIdx * 2 + slotIdx,
-      };
-    })
+  const completedResults = useMemo(
+    () =>
+      uploads
+        .map((upload) => upload.result)
+        .filter((result): result is AnalysisResult => Boolean(result)),
+    [uploads]
   );
-  const phaseMetrics = timelineSlots;
-  const chartPoints = phaseMetrics.map((metric, index) => ({
-    x: 24 + index * (phaseMetrics.length > 1 ? 72 / (phaseMetrics.length - 1) : 0),
-    y: 84 - Math.min(76, Math.max(6, metric.avg * 0.76)),
-  }));
-  const chartLine = chartPoints.map((point) => `${point.x},${point.y}`).join(' ');
 
-  const selectedPhase = phaseMetrics.find((phase) => phase.key === selectedPhaseKey) || null;
-  const phaseCriteria = useMemo(() => {
-    if (!selectedPhase) return [];
-    const merged = new Map<string, { label: string; note: string }>();
-    selectedPhase.results.forEach((result) => {
-      result.criterios.forEach((criterio) => {
-        const key = criterio.criterio.trim().toLowerCase();
-        if (!merged.has(key)) merged.set(key, { label: criterio.criterio, note: criterio.anotacion });
-      });
-    });
-    return Array.from(merged.values());
-  }, [selectedPhase]);
+  const timelineSlots: DashboardSlot[] = useMemo(() => {
+    const durationLookup = buildDurationLookup(
+      dashboardData?.segments.items,
+      fallbackTeamAName,
+      fallbackTeamBName
+    );
+
+    return uploadsByFase.flatMap(({ uploads: faseUploads }) =>
+      faseUploads.map((upload) => {
+        const team: 'A' | 'B' = upload.postura.toLowerCase().includes('favor') ? 'A' : 'B';
+        const key = getDashboardSlotKey(upload.faseNombre, team);
+        const slotResults = upload.result
+          ? [upload.result]
+          : completedResults.filter(
+              (result) =>
+                normalizePhaseName(result.fase) === normalizePhaseName(upload.faseNombre) &&
+                result.postura.trim().toLowerCase() === upload.postura.trim().toLowerCase()
+            );
+
+        const status =
+          upload.status === 'completed' && slotResults.length > 0
+            ? 'analyzed'
+            : upload.status === 'analyzing' ||
+                upload.status === 'uploading' ||
+                upload.status === 'converting'
+              ? 'analyzing'
+              : 'pending';
+
+        return {
+          key,
+          phase: upload.faseNombre,
+          team,
+          teamName: team === 'A' ? fallbackTeamAName : fallbackTeamBName,
+          avg: averageScore(slotResults),
+          status,
+          durationSeconds: durationLookup.get(key) ?? null,
+          isCurrent: false,
+          isSelectable: status !== 'pending' || Boolean(upload.file) || Boolean(upload.persistedFileName),
+          results: slotResults,
+        };
+      })
+    );
+  }, [
+    uploadsByFase,
+    completedResults,
+    dashboardData?.segments.items,
+    fallbackTeamAName,
+    fallbackTeamBName,
+  ]);
+
+  const selectedSlot = useMemo(
+    () => timelineSlots.find((slot) => slot.key === selectedSlotKey) || null,
+    [timelineSlots, selectedSlotKey]
+  );
+
+  const selectedCriteria = useMemo(
+    () => mergeCriteriaNotes(selectedSlot?.results || []),
+    [selectedSlot]
+  );
 
   useEffect(() => {
-    setSelectedCriterionIndex(0);
-  }, [selectedPhaseKey]);
+    autoOpenedSlotRef.current = null;
+    setSelectedCriterionId(null);
+  }, [selectedSlotKey]);
 
-  const scorePercent = (result: AnalysisResult) =>
-    result.score_percent ?? (result.total / Math.max(1, result.max_total)) * 100;
+  useEffect(() => {
+    if (!selectedSlotKey || selectedCriteria.length === 0) return;
+    if (autoOpenedSlotRef.current === selectedSlotKey) return;
 
-  const phaseTeamAScore40 = selectedPhase
-    ? Math.round(
-        (selectedPhase.results
-          .filter((result) => result.postura.toLowerCase().includes('favor'))
-          .reduce((sum, result, _, arr) => sum + scorePercent(result) / Math.max(1, arr.length), 0) /
-          100) *
-          40
-      )
-    : 0;
-
-  const phaseTeamBScore40 = selectedPhase
-    ? Math.round(
-        (selectedPhase.results
-          .filter((result) => result.postura.toLowerCase().includes('contra'))
-          .reduce((sum, result, _, arr) => sum + scorePercent(result) / Math.max(1, arr.length), 0) /
-          100) *
-          40
-      )
-    : 0;
+    setSelectedCriterionId(selectedCriteria[0].id);
+    autoOpenedSlotRef.current = selectedSlotKey;
+  }, [selectedSlotKey, selectedCriteria]);
 
   if (!debateData) {
     return (
-      <div className="app-shell flex items-center justify-center">
-        <div className="text-[#2C2C2C]/70">Error: No se proporciono debate ni proyecto</div>
+      <div className="app-shell app-fixed-screen">
+        <div className="app-fixed-screen__body flex items-center justify-center">
+          <div className="text-[#2C2C2C]/70">Error: No se proporciono debate ni proyecto</div>
+        </div>
       </div>
     );
   }
 
   if (!selectedDebateType) {
     return (
-      <div className="app-shell flex items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#2C2C2C]/70" />
+      <div className="app-shell app-fixed-screen">
+        <div className="app-fixed-screen__body flex items-center justify-center">
+          <Loader2 className="h-10 w-10 animate-spin text-[#2C2C2C]/70" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="app-shell overflow-y-auto pb-32">
-      <div className="px-5 py-8 sm:px-8">
-        <div className="mx-auto w-full max-w-[1040px]">
-          <BrandHeader className="mb-6" />
-          <h1 className="mb-5 text-center text-[72px] leading-none text-[#2C2C2C]">
+    <div className="app-shell app-fixed-screen">
+      <div className="app-fixed-screen__body px-5 py-6 sm:px-8">
+        <div className="mx-auto flex h-full w-full max-w-[1200px] flex-col">
+          <BrandHeader className="mb-5 shrink-0" />
+          <h1 className="mb-4 shrink-0 text-center text-[40px] leading-none text-[#2C2C2C] sm:text-[54px]">
             {debateData.name || debateData.debate_topic || 'Nombre Debate'}
           </h1>
 
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
             <button
               onClick={onBack}
-              className="inline-flex h-[64px] w-[64px] items-center justify-center rounded-2xl border border-[#D7D7D5] bg-[#ECECE9] text-[#2C2C2C] hover:opacity-90"
+              className="inline-flex h-[60px] w-[60px] items-center justify-center rounded-2xl border border-[#D7D7D5] bg-[#ECECE9] text-[#2C2C2C] hover:opacity-90"
             >
-              <ArrowLeft className="h-9 w-9" />
+              <ArrowLeft className="h-8 w-8" />
             </button>
-            <div className="flex items-center gap-3">
+
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowConfigModal(true)}
-                className="inline-flex items-center gap-2 rounded-xl border border-[#2C2C2C]/14 bg-[#ECECE9] px-4 py-2 text-[20px] text-[#2C2C2C]"
+                className="inline-flex items-center gap-2 rounded-xl border border-[#2C2C2C]/14 bg-[#ECECE9] px-4 py-2 text-[18px] text-[#2C2C2C]"
               >
                 <Users className="h-5 w-5" />
                 {numOradores} orador{numOradores > 1 ? 'es' : ''}
               </button>
+
               {allCompleted ? (
-                <LiquidGlassButton onClick={onViewResults} variant="primary" className="rounded-xl border-0 bg-[#3A7D44] px-5 py-2.5 text-white">
+                <LiquidGlassButton
+                  onClick={onViewResults}
+                  variant="primary"
+                  className="rounded-xl border-0 bg-[#3A7D44] px-5 py-2.5 text-white"
+                >
                   <BarChart3 className="mr-2 inline h-5 w-5" />
                   Ver Dashboard
                 </LiquidGlassButton>
@@ -428,302 +503,169 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
                   disabled={!hasPendingUploads || isAnalyzing}
                   className="rounded-xl border-0 bg-[#3A7D44] px-5 py-2.5 text-white disabled:opacity-50"
                 >
-                  {isAnalyzing ? <Loader2 className="mr-2 inline h-5 w-5 animate-spin" /> : <Play className="mr-2 inline h-5 w-5" />}
+                  {isAnalyzing ? (
+                    <Loader2 className="mr-2 inline h-5 w-5 animate-spin" />
+                  ) : (
+                    <Play className="mr-2 inline h-5 w-5" />
+                  )}
                   Analizar
                 </LiquidGlassButton>
               )}
             </div>
           </div>
 
-          <div className="overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <div
-              className="flex w-[200%] transition-transform duration-500 ease-out"
+              className="flex h-full w-[200%] transition-transform duration-500 ease-out"
               style={{ transform: isDashboardView ? 'translateX(-50%)' : 'translateX(0)' }}
             >
-              <section className="w-1/2 pr-2">
-                <div className="rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] px-4 py-4">
-                  <div className="mb-4 grid grid-cols-2 gap-4">
-                    <p className="text-center text-[48px] leading-none text-[#2C2C2C]">{debateData.team_a_name || 'Equipo A'}</p>
-                    <p className="text-center text-[48px] leading-none text-[#2C2C2C]">{debateData.team_b_name || 'Equipo B'}</p>
+              <section className="h-full w-1/2 pr-2">
+                <div className="flex h-full flex-col rounded-[24px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] px-4 py-4">
+                  <div className="mb-4 grid shrink-0 grid-cols-2 gap-4">
+                    <p className="text-center text-[36px] leading-none text-[#2C2C2C] sm:text-[42px]">
+                      {debateData.team_a_name || 'Equipo A'}
+                    </p>
+                    <p className="text-center text-[36px] leading-none text-[#2C2C2C] sm:text-[42px]">
+                      {debateData.team_b_name || 'Equipo B'}
+                    </p>
                   </div>
 
-                  <div className="space-y-6">
-                    {uploadsByFase.map(({ fase, uploads: faseUploads }) => (
-                      <div key={fase.id}>
-                        <h3 className="mb-3 text-[40px] font-bold leading-none text-[#2C2C2C]">{fase.nombre}</h3>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                          {faseUploads.map((upload) => (
-                            <div
-                              key={upload.id}
-                              className="rounded-[14px] border px-4 py-4"
-                              style={{
-                                background: getPostureCardTone(upload.postura, teamAColor, teamBColor).background,
-                                borderColor: getPostureCardTone(upload.postura, teamAColor, teamBColor).borderColor,
-                              }}
-                            >
-                              <div className="mb-3 flex items-center justify-end">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[16px] text-white/85">Nº oradores:</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={10}
-                                    value={upload.numOradores}
-                                    onChange={(e) => handleNumOradoresChange(upload.id, parseInt(e.target.value, 10) || 1)}
-                                    className="w-14 rounded border border-white/45 bg-white px-2 py-1 text-center text-[16px] text-[#2C2C2C]"
-                                  />
-                                </div>
-                              </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-5">
+                      {uploadsByFase.map(({ fase, uploads: faseUploads }) => (
+                        <div key={fase.id}>
+                          <h3 className="mb-3 text-[28px] font-bold leading-none text-[#2C2C2C] sm:text-[34px]">
+                            {fase.nombre}
+                          </h3>
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            {faseUploads.map((upload) => {
+                              const tone = getPostureCardTone(upload.postura, teamAColor, teamBColor);
 
-                              <div className="mb-4 space-y-3">
-                                {fase.permite_minuto_oro && (
-                                  <button
-                                    onClick={() => handleMinutoOroChange(upload.id, !upload.minutoOroUtilizado)}
-                                    className={`w-full rounded-xl border-2 px-4 py-2 text-left text-sm transition-all ${
-                                      upload.minutoOroUtilizado
-                                        ? 'border-yellow-400 bg-yellow-100 text-yellow-700'
-                                        : 'border-white/45 bg-white/90 text-[#2C2C2C]'
-                                    }`}
-                                  >
-                                    {upload.minutoOroUtilizado ? 'Minuto de oro activado' : 'Usar minuto de oro'}
-                                  </button>
-                                )}
-
-                                {fase.permite_preguntas && (
-                                  <div className="space-y-2 rounded-xl border border-white/45 bg-white/85 p-3">
+                              return (
+                                <div
+                                  key={upload.id}
+                                  className="rounded-[16px] border px-4 py-4"
+                                  style={{
+                                    background: tone.background,
+                                    borderColor: tone.borderColor,
+                                  }}
+                                >
+                                  <div className="mb-3 flex items-center justify-end">
                                     <div className="flex items-center gap-2">
-                                      <span className="w-32 text-sm text-[#2C2C2C]/80">Preguntas hechas:</span>
+                                      <span className="text-[15px] text-white/85">Nº oradores:</span>
                                       <input
                                         type="number"
-                                        min={0}
+                                        min={1}
                                         max={10}
-                                        value={upload.preguntasRealizadas || 0}
-                                        onChange={(e) => handlePreguntasChange(upload.id, 'preguntasRealizadas', parseInt(e.target.value, 10) || 0)}
-                                        className="w-16 rounded border border-[#2C2C2C]/15 bg-white px-2 py-1 text-center text-sm text-[#2C2C2C]"
-                                      />
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-32 text-sm text-[#2C2C2C]/80">Respondidas:</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        max={upload.preguntasRealizadas || 0}
-                                        value={upload.preguntasRespondidas || 0}
-                                        onChange={(e) => handlePreguntasChange(upload.id, 'preguntasRespondidas', parseInt(e.target.value, 10) || 0)}
-                                        className="w-16 rounded border border-[#2C2C2C]/15 bg-white px-2 py-1 text-center text-sm text-[#2C2C2C]"
+                                        value={upload.numOradores}
+                                        onChange={(e) =>
+                                          handleNumOradoresChange(upload.id, parseInt(e.target.value, 10) || 1)
+                                        }
+                                        className="w-14 rounded border border-white/45 bg-white px-2 py-1 text-center text-[15px] text-[#2C2C2C]"
                                       />
                                     </div>
                                   </div>
-                                )}
-                              </div>
 
-                              <AudioDropZone
-                                upload={upload}
-                                onFileSelected={(file, wavBlob) => handleFileSelected(upload.id, file, wavBlob)}
-                                onClear={() => handleClearUpload(upload.id)}
-                                onRetry={() => handleRetryUpload(upload.id)}
-                              />
-                            </div>
-                          ))}
+                                  <div className="mb-4 space-y-3">
+                                    {fase.permite_minuto_oro && (
+                                      <button
+                                        onClick={() => handleMinutoOroChange(upload.id, !upload.minutoOroUtilizado)}
+                                        className={`w-full rounded-xl border-2 px-4 py-2 text-left text-sm transition-all ${
+                                          upload.minutoOroUtilizado
+                                            ? 'border-yellow-400 bg-yellow-100 text-yellow-700'
+                                            : 'border-white/45 bg-white/90 text-[#2C2C2C]'
+                                        }`}
+                                      >
+                                        {upload.minutoOroUtilizado ? 'Minuto de oro activado' : 'Usar minuto de oro'}
+                                      </button>
+                                    )}
+
+                                    {fase.permite_preguntas && (
+                                      <div className="space-y-2 rounded-xl border border-white/45 bg-white/85 p-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-32 text-sm text-[#2C2C2C]/80">Preguntas hechas:</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={10}
+                                            value={upload.preguntasRealizadas || 0}
+                                            onChange={(e) =>
+                                              handlePreguntasChange(
+                                                upload.id,
+                                                'preguntasRealizadas',
+                                                parseInt(e.target.value, 10) || 0
+                                              )
+                                            }
+                                            className="w-16 rounded border border-[#2C2C2C]/15 bg-white px-2 py-1 text-center text-sm text-[#2C2C2C]"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-32 text-sm text-[#2C2C2C]/80">Respondidas:</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={upload.preguntasRealizadas || 0}
+                                            value={upload.preguntasRespondidas || 0}
+                                            onChange={(e) =>
+                                              handlePreguntasChange(
+                                                upload.id,
+                                                'preguntasRespondidas',
+                                                parseInt(e.target.value, 10) || 0
+                                              )
+                                            }
+                                            className="w-16 rounded border border-[#2C2C2C]/15 bg-white px-2 py-1 text-center text-sm text-[#2C2C2C]"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <AudioDropZone
+                                    upload={upload}
+                                    onFileSelected={(file, wavBlob) => handleFileSelected(upload.id, file, wavBlob)}
+                                    onClear={() => handleClearUpload(upload.id)}
+                                    onRetry={() => handleRetryUpload(upload.id)}
+                                    teamAColor={teamAColor}
+                                    teamBColor={teamBColor}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </section>
 
-              <section className="w-1/2 pl-2">
-                <div className="relative overflow-hidden rounded-[20px] border-[4px] border-[#1C1D1F] bg-[#F0F0EE] p-4 min-h-[660px] lg:min-h-[560px]">
-                  <div
-                    className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                      selectedPhase
-                        ? 'pointer-events-none absolute inset-4 translate-x-[-10%] scale-[0.96] opacity-0'
-                        : 'relative translate-x-0 scale-100 opacity-100'
-                    }`}
-                  >
-                      <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px]">
-                        <div className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[24px] text-[#2C2C2C]">{debateData.team_a_name || 'A favor'}:</span>
-                            <span className="rounded-xl px-3 py-1 text-[28px] text-white" style={{ background: teamAColor }}>
-                              {teamAScore40}
-                              <span className="text-[16px] opacity-80">/40</span>
-                            </span>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between">
-                            <span className="text-[24px] text-[#2C2C2C]">{debateData.team_b_name || 'En contra'}:</span>
-                            <span className="rounded-xl px-3 py-1 text-[28px] text-white" style={{ background: teamBColor }}>
-                              {teamBScore40}
-                              <span className="text-[16px] opacity-80">/40</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-3 py-2">
-                          <p className="text-[28px] leading-none text-[#2C2C2C]">Ptos</p>
-                          <svg viewBox="0 0 100 100" className="mt-2 h-[120px] w-full">
-                            <line x1="12" y1="8" x2="12" y2="88" stroke="#2C2C2C" strokeWidth="1.8" />
-                            <line x1="12" y1="88" x2="94" y2="88" stroke="#2C2C2C" strokeWidth="1.8" />
-                            {chartLine && <polyline fill="none" stroke={teamAColor} strokeWidth="2.4" points={chartLine} />}
-                            {chartPoints.map((point, index) => (
-                              <circle key={`analysis-point-${index}`} cx={point.x} cy={point.y} r="2.2" fill={teamAColor} />
-                            ))}
-                          </svg>
-                          <p className="text-center text-[30px] leading-none text-[#2C2C2C]">Rondas</p>
-                        </div>
-
-                        <button className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-4 text-center text-[#2C2C2C]">
-                          <p className="text-[44px] leading-tight">Compartir Dashboard</p>
-                          <span className="mt-2 inline-block text-[44px]">↗</span>
-                        </button>
-                      </div>
-
-                      <div className="mt-4 rounded-2xl border-[3px] border-[#1C1D1F] bg-[#ECECE9] px-4 py-4">
-                        <div className="mb-3 grid grid-cols-4 gap-2">
-                          {phaseMetrics.filter((phase) => phase.team === 'A').map((phase) => (
-                            <button
-                              key={`analysis-phase-${phase.key}`}
-                              type="button"
-                              onClick={() => setSelectedPhaseKey(phase.key)}
-                              className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
-                              style={{
-                                background: phase.hasAnalyzed || phase.isAnalyzing ? teamAColor : '#DADADA',
-                                color: '#fff',
-                                opacity: phase.hasAnalyzed || phase.isAnalyzing ? 1 : 0.45,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {phase.phase}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="relative mt-5">
-                          <div className="h-[4px] w-full bg-[#2C2C2C]" />
-                          <div className="absolute left-0 right-0 top-[-9px] flex items-center justify-between">
-                            {phaseMetrics.map((phase) => (
-                              <button
-                                key={`analysis-dot-${phase.key}`}
-                                type="button"
-                                onClick={() => setSelectedPhaseKey(phase.key)}
-                                className="flex h-5 w-5 items-center justify-center rounded-full border-2 bg-[#F0F0EE] transition-transform hover:scale-110"
-                                style={{ borderColor: phase.hasAnalyzed ? '#3A7D44' : phase.isAnalyzing ? '#E6C068' : '#B8B8B6' }}
-                                title={phase.hasAnalyzed ? 'Analizado' : phase.isAnalyzing ? 'Analizando' : 'Pendiente'}
-                              >
-                                {phase.hasAnalyzed ? (
-                                  <img src={checkIcon} alt="" aria-hidden className="h-3 w-3" />
-                                ) : phase.isAnalyzing ? (
-                                  <img src={loaderIcon} alt="" aria-hidden className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <span className="h-2 w-2 rounded-full bg-[#B8B8B6]" />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-4 gap-2">
-                          {phaseMetrics.filter((phase) => phase.team === 'B').map((phase) => (
-                            <button
-                              key={`analysis-phase-bottom-${phase.key}`}
-                              type="button"
-                              onClick={() => setSelectedPhaseKey(phase.key)}
-                              className="rounded-[14px] px-2 py-2 text-center text-[24px] leading-none text-white transition-transform hover:scale-[1.02]"
-                              style={{
-                                background: phase.hasAnalyzed || phase.isAnalyzing ? teamBColor : '#DADADA',
-                                color: '#fff',
-                                opacity: phase.hasAnalyzed || phase.isAnalyzing ? 1 : 0.45,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {phase.phase}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                  </div>
-
-                  <div
-                    className={`transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                      selectedPhase
-                        ? 'relative translate-x-0 scale-100 opacity-100'
-                        : 'pointer-events-none absolute inset-4 translate-x-[10%] scale-[0.96] opacity-0'
-                    }`}
-                  >
-                  {selectedPhase && (
-                    <div className="rounded-2xl px-4 py-4 text-white" style={{ background: selectedPhase.team === 'A' ? teamAColor : teamBColor }}>
-                      <div className="mb-4 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPhaseKey(null)}
-                          className="rounded-full bg-white/20 px-3 py-1 text-[28px] leading-none text-white"
-                        >
-                          ‹
-                        </button>
-                        <h3 className="text-[58px] leading-none">{selectedPhase.phase}</h3>
-                        <div className="w-10" />
-                      </div>
-
-                      <div className="grid gap-3 lg:grid-cols-[0.95fr_1fr_0.9fr]">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="rounded-2xl bg-white p-3 text-[#1C1D1F]">
-                            <p className="text-[18px] leading-none">PTOS</p>
-                            <p className="mt-2 text-[54px] leading-none">
-                              {phaseTeamAScore40}
-                              <span className="text-[26px] opacity-60">/40</span>
-                            </p>
-                          </div>
-                          <div className="rounded-2xl bg-white p-3 text-[#1C1D1F]">
-                            <p className="text-[18px] leading-none">PTOS</p>
-                            <p className="mt-2 text-[54px] leading-none">
-                              {phaseTeamBScore40}
-                              <span className="text-[26px] opacity-60">/40</span>
-                            </p>
-                          </div>
-                          <div className="rounded-2xl bg-white p-3 text-[#1C1D1F]">
-                            <p className="text-[18px] leading-none">DURACION</p>
-                            <p className="mt-2 text-[54px] leading-none">1:30</p>
-                          </div>
-                          <div className="rounded-2xl bg-white p-3 text-[#1C1D1F]">
-                            <p className="text-[18px] leading-none">ENERGIA</p>
-                            <p className="mt-2 text-[54px] leading-none">{Math.round(selectedPhase.avg || 0)}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl bg-white p-3 text-[#1C1D1F]">
-                          <div className="space-y-1">
-                            {phaseCriteria.slice(0, 8).map((criterion, index) => (
-                              <button
-                                key={`analysis-phase-criterion-${criterion.label}`}
-                                onClick={() => setSelectedCriterionIndex(index)}
-                                className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left"
-                                style={{ background: selectedCriterionIndex === index ? '#F1F1F0' : 'transparent' }}
-                              >
-                                <span className="text-[26px] leading-none">{criterion.label}</span>
-                                <span className="text-[34px] leading-none">›</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl bg-white p-3 text-[#2C2C2C]">
-                          <p className="text-[22px] leading-tight">
-                            {phaseCriteria[selectedCriterionIndex]?.note ||
-                              (selectedPhase.hasAnalyzed
-                                ? 'Sin anotaciones para esta fase.'
-                                : selectedPhase.isAnalyzing
-                                ? 'Analizando esta fase... en unos segundos apareceran las metricas.'
-                                : 'Esta fase aun no tiene analisis disponible.')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  </div>
-                </div>
+              <section className="h-full w-1/2 pl-2">
+                <EmbeddedDebateDashboard
+                  slots={timelineSlots}
+                  teamAName={debateData.team_a_name || 'A favor'}
+                  teamBName={debateData.team_b_name || 'En contra'}
+                  teamAColor={teamAColor}
+                  teamBColor={teamBColor}
+                  selectedSlotKey={selectedSlotKey}
+                  onSelectSlot={setSelectedSlotKey}
+                  onClearSelectedSlot={() => setSelectedSlotKey(null)}
+                  criteria={selectedCriteria}
+                  selectedCriterionId={selectedCriterionId}
+                  onSelectCriterion={(criterionId) =>
+                    setSelectedCriterionId((prev) => (prev === criterionId ? null : criterionId))
+                  }
+                  shareLabel="Compartir Dashboard"
+                  shareState={shareState}
+                  onShare={createShareLink}
+                  onCopyShare={copyShareLink}
+                  onOpenShare={openShareLink}
+                  onDismissShare={dismissShareLink}
+                />
               </section>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-center">
+          <div className="mt-4 flex justify-center shrink-0">
             <button
               type="button"
               aria-label="Cambiar vista analisis"
@@ -757,7 +699,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
               onChange={(e) => setNumOradores(parseInt(e.target.value, 10) || 1)}
               className="mb-5 w-full rounded-xl border border-[#2C2C2C]/18 bg-white px-4 py-3 text-[20px] text-[#2C2C2C] outline-none"
             />
-            <LiquidGlassButton onClick={() => setShowConfigModal(false)} variant="primary" className="w-full rounded-xl border-0 bg-[#3A7D44] text-white">
+            <LiquidGlassButton
+              onClick={() => setShowConfigModal(false)}
+              variant="primary"
+              className="w-full rounded-xl border-0 bg-[#3A7D44] text-white"
+            >
               Guardar
             </LiquidGlassButton>
           </div>

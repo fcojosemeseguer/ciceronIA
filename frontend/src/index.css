@@ -382,6 +382,18 @@ textarea:focus {
   color: var(--app-text);
 }
 
+.app-fixed-screen {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.app-fixed-screen__body {
+  height: calc(100dvh - var(--app-dock-space));
+  max-height: calc(100dvh - var(--app-dock-space));
+  overflow: hidden;
+}
+
 .app-panel {
   background: var(--app-surface);
   border: 1px solid var(--app-border);
@@ -498,6 +510,7 @@ textarea:focus {
   --brand-dark: #2c2c2c;
   --team-home: #3a6ea5;
   --team-away: #c44536;
+  --app-dock-space: 108px;
 }
 
 @keyframes live-enter {

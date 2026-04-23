@@ -27,7 +27,6 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
   onStartAnalysis,
 }) => {
   const {
-    debateTypes,
     isLoading,
     error,
     fetchDebateTypes,

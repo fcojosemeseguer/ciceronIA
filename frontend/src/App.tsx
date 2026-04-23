@@ -18,7 +18,6 @@ import {
   DashboardScreen,
   DebateModeScreen,
   SettingsScreen,
-  AnalysisSetupScreen,
   PublicDashboardScreen,
   // Nuevos componentes
   DebatesScreen,
@@ -88,7 +87,7 @@ function App() {
   const [configMode, setConfigMode] = useState<DebateMode>('live');
   
   // LEGACY: Mantener compatibilidad durante transición
-  const [selectedAnalysisProject, setSelectedAnalysisProject] = useState<Project | null>(null);
+  const [selectedAnalysisProject] = useState<Project | null>(null);
 
   // Función para navegar guardando historial
   type NavigationMode = 'push' | 'replace' | 'reset';
@@ -263,20 +262,6 @@ function App() {
     navigateTo('debate-config');
   };
 
-  const handleSelectProject = (project: Project) => {
-    setSelectedAnalysisProject(project);
-    navigateTo('analysis');
-  };
-
-  const handleStartLiveDebate = (project: Project) => {
-    setSelectedAnalysisProject(project);
-    navigateTo('competition');
-  };
-
-  const handleAddAnalysis = () => {
-    navigateTo('analysis');
-  };
-
   const handleViewHistory = () => {
     navigateTo('home');
   };
@@ -299,11 +284,6 @@ function App() {
   // Analysis
   const handleViewResults = () => {
     navigateTo('analysis-results');
-  };
-
-  const handleBackFromAnalysis = () => {
-    clearUploads();
-    navigateTo('dashboard', 'replace');
   };
 
   const getCurrentAnalysisDebateCode = () =>
@@ -867,4 +847,3 @@ function App() {
 }
 
 export default App;
-
