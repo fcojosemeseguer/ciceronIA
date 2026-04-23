@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
@@ -22,6 +23,7 @@ from fastapi import (
     status,
 )
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.v1.models import (
     AnalyseData,
@@ -85,6 +87,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 router = APIRouter()
 
 chats = {}
+ANALYSIS_PIPELINE_LOCK = asyncio.Lock()
 
 upct_phase_enum_by_id = {
     "introduccion": DebateFase.INTRO,
@@ -113,6 +116,20 @@ KEY_METRICS_NAMES = [
 
 def get_chat(project_code):
     return chats.get(project_code)
+
+
+def _store_uploaded_file(upload: UploadFile, destination: Path) -> None:
+    with destination.open("wb") as buffer:
+        shutil.copyfileobj(upload.file, buffer)
+
+
+def _persist_analysis_artifacts(
+    file_path: str,
+    transcription: list[dict],
+    metrics: dict,
+) -> None:
+    save_transcription(file_path, transcription, "")
+    save_metrics(file_path, metrics)
 
 
 def _normalize_text(value: str) -> str:
@@ -681,103 +698,120 @@ async def analyse(
     try:
         file_name = f"{uuid4()}.wav"
         file_path = UPLOAD_DIR / file_name
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(data.file.file, buffer)
+        await run_in_threadpool(_store_uploaded_file, data.file, file_path)
         await data.file.close()
 
-        if chats.get(project["code"]) is None:
-            chats[project["code"]] = create_chat(
-                project["code"],
-                project["code"],
-                debate_type_config=debate_config,
+        # El pipeline de análisis usa librerías CPU/GPU, modelos compartidos y TinyDB,
+        # así que lo sacamos del event loop y evitamos acceso concurrente inseguro.
+        async with ANALYSIS_PIPELINE_LOCK:
+            if chats.get(project["code"]) is None:
+                chats[project["code"]] = create_chat(
+                    project["code"],
+                    project["code"],
+                    debate_type_config=debate_config,
+                )
+            chat = chats[project["code"]]
+
+            analysis_data = await run_in_threadpool(
+                process_complete_analysis,
+                str(file_path),
+                data.num_speakers,
             )
-        chat = chats[project["code"]]
+            transcription = analysis_data["transcript"]
+            metrics = analysis_data["metrics"]
 
-        analysis_data = process_complete_analysis(
-            str(file_path), num_speakers=data.num_speakers
-        )
-        transcription = analysis_data["transcript"]
-        metrics = analysis_data["metrics"]
-
-        save_transcription(str(file_path), transcription, "")
-        save_metrics(str(file_path), metrics)
-
-        duracion = None
-        if transcription:
-            duracion = transcription[-1]["end"] - transcription[0]["start"]
-
-        if debate_type_id == "upct" and fase_cfg.id in upct_phase_enum_by_id:
-            fase_arg = upct_phase_enum_by_id[fase_cfg.id]
-            postura_arg = upct_postura_enum_by_value[postura_str]
-        else:
-            fase_arg = fase_cfg.id
-            postura_arg = postura_str
-
-        resultado = chat.send_evaluation(
-            fase=fase_arg,
-            postura=postura_arg,
-            orador=data.orador,
-            transcripcion=transcription,
-            metricas=metrics,
-            duracion_segundos=duracion,
-        )
-
-        criterios = []
-        total = 0
-        for criterio, nota in resultado.puntuaciones.items():
-            anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append(
-                {"criterio": criterio, "nota": nota, "anotacion": anotacion}
+            await run_in_threadpool(
+                _persist_analysis_artifacts,
+                str(file_path),
+                transcription,
+                metrics,
             )
-            total += nota
 
-        max_total = len(resultado.puntuaciones) * debate_config.escala_max
-        score_percent = round((total / max_total) * 100, 2) if max_total > 0 else 0.0
+            duracion = None
+            if transcription:
+                duracion = transcription[-1]["end"] - transcription[0]["start"]
 
-        if not create_analysis(
-            {
-                "fase": resultado.fase,
-                "postura": resultado.postura,
-                "orador": resultado.orador,
-                "criterios": criterios,
-                "total": total,
-                "max_total": max_total,
+            if debate_type_id == "upct" and fase_cfg.id in upct_phase_enum_by_id:
+                fase_arg = upct_phase_enum_by_id[fase_cfg.id]
+                postura_arg = upct_postura_enum_by_value[postura_str]
+            else:
+                fase_arg = fase_cfg.id
+                postura_arg = postura_str
+
+            resultado = await run_in_threadpool(
+                chat.send_evaluation,
+                fase_arg,
+                postura_arg,
+                data.orador,
+                transcription,
+                metrics,
+                duracion,
+            )
+
+            criterios = []
+            total = 0
+            for criterio, nota in resultado.puntuaciones.items():
+                anotacion = resultado.anotaciones.get(criterio, "")
+                criterios.append(
+                    {"criterio": criterio, "nota": nota, "anotacion": anotacion}
+                )
+                total += nota
+
+            max_total = len(resultado.puntuaciones) * debate_config.escala_max
+            score_percent = (
+                round((total / max_total) * 100, 2) if max_total > 0 else 0.0
+            )
+
+            legacy_saved = await run_in_threadpool(
+                create_analysis,
+                {
+                    "fase": resultado.fase,
+                    "postura": resultado.postura,
+                    "orador": resultado.orador,
+                    "criterios": criterios,
+                    "total": total,
+                    "max_total": max_total,
+                    "project_code": project["code"],
+                    "debate_type": debate_type_id,
+                },
+            )
+            if not legacy_saved:
+                raise HTTPException(
+                    status_code=500, detail="error while saving legacy analysis"
+                )
+
+            segment_payload = {
+                "segment_id": str(uuid4()),
                 "project_code": project["code"],
+                "user_code": user_code,
+                "file_path": str(file_path),
                 "debate_type": debate_type_id,
+                "fase_id": fase_cfg.id,
+                "fase_nombre": fase_cfg.nombre,
+                "postura": postura_str,
+                "orador": data.orador,
+                "num_speakers": data.num_speakers,
+                "duration_seconds": duracion,
+                "transcript": transcription,
+                "transcript_preview": _build_transcript_preview(transcription),
+                "metrics_summary": _build_metrics_summary(metrics),
+                "metrics_raw": metrics,
+                "analysis": {
+                    "criterios": criterios,
+                    "total": total,
+                    "max_total": max_total,
+                    "score_percent": score_percent,
+                },
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
-        ):
-            raise HTTPException(
-                status_code=500, detail="error while saving legacy analysis"
+            segment_saved = await run_in_threadpool(
+                create_project_segment,
+                segment_payload,
             )
-
-        segment_payload = {
-            "segment_id": str(uuid4()),
-            "project_code": project["code"],
-            "user_code": user_code,
-            "file_path": str(file_path),
-            "debate_type": debate_type_id,
-            "fase_id": fase_cfg.id,
-            "fase_nombre": fase_cfg.nombre,
-            "postura": postura_str,
-            "orador": data.orador,
-            "num_speakers": data.num_speakers,
-            "duration_seconds": duracion,
-            "transcript": transcription,
-            "transcript_preview": _build_transcript_preview(transcription),
-            "metrics_summary": _build_metrics_summary(metrics),
-            "metrics_raw": metrics,
-            "analysis": {
-                "criterios": criterios,
-                "total": total,
-                "max_total": max_total,
-                "score_percent": score_percent,
-            },
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if not create_project_segment(segment_payload):
-            raise HTTPException(
-                status_code=500, detail="error while saving project segment"
-            )
+            if not segment_saved:
+                raise HTTPException(
+                    status_code=500, detail="error while saving project segment"
+                )
 
         return {
             "message": "analysis succeeded!",
@@ -822,53 +856,56 @@ async def quick_analyse(
 
         file_name = f"quick_{uuid4()}.wav"
         file_path = UPLOAD_DIR / file_name
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(data.file.file, buffer)
+        await run_in_threadpool(_store_uploaded_file, data.file, file_path)
         await data.file.close()
 
-        temp_session_id = f"quick_{id(data)}"
-        chat = create_chat(
-            temp_session_id, temp_session_id, debate_type_config=debate_config
-        )
-
-        analysis_data = process_complete_analysis(
-            str(file_path), num_speakers=data.num_speakers
-        )
-        transcription = analysis_data["transcript"]
-        metrics = analysis_data["metrics"]
-
-        duracion = None
-        if transcription:
-            duracion = transcription[-1]["end"] - transcription[0]["start"]
-
-        if data.debate_type == "upct" and fase_cfg.id in upct_phase_enum_by_id:
-            fase_arg = upct_phase_enum_by_id[fase_cfg.id]
-            postura_arg = upct_postura_enum_by_value[postura_str]
-        else:
-            fase_arg = fase_cfg.id
-            postura_arg = postura_str
-
-        resultado = chat.send_evaluation(
-            fase=fase_arg,
-            postura=postura_arg,
-            orador=data.orador,
-            transcripcion=transcription,
-            metricas=metrics,
-            duracion_segundos=duracion,
-        )
-
-        criterios = []
-        total = 0
-        for criterio, nota in resultado.puntuaciones.items():
-            anotacion = resultado.anotaciones.get(criterio, "")
-            criterios.append(
-                {"criterio": criterio, "nota": nota, "anotacion": anotacion}
+        async with ANALYSIS_PIPELINE_LOCK:
+            temp_session_id = f"quick_{id(data)}"
+            chat = create_chat(
+                temp_session_id, temp_session_id, debate_type_config=debate_config
             )
-            total += nota
 
-        max_total = len(resultado.puntuaciones) * debate_config.escala_max
+            analysis_data = await run_in_threadpool(
+                process_complete_analysis,
+                str(file_path),
+                data.num_speakers,
+            )
+            transcription = analysis_data["transcript"]
+            metrics = analysis_data["metrics"]
 
-        chat.clear_history()
+            duracion = None
+            if transcription:
+                duracion = transcription[-1]["end"] - transcription[0]["start"]
+
+            if data.debate_type == "upct" and fase_cfg.id in upct_phase_enum_by_id:
+                fase_arg = upct_phase_enum_by_id[fase_cfg.id]
+                postura_arg = upct_postura_enum_by_value[postura_str]
+            else:
+                fase_arg = fase_cfg.id
+                postura_arg = postura_str
+
+            resultado = await run_in_threadpool(
+                chat.send_evaluation,
+                fase_arg,
+                postura_arg,
+                data.orador,
+                transcription,
+                metrics,
+                duracion,
+            )
+
+            criterios = []
+            total = 0
+            for criterio, nota in resultado.puntuaciones.items():
+                anotacion = resultado.anotaciones.get(criterio, "")
+                criterios.append(
+                    {"criterio": criterio, "nota": nota, "anotacion": anotacion}
+                )
+                total += nota
+
+            max_total = len(resultado.puntuaciones) * debate_config.escala_max
+
+            await run_in_threadpool(chat.clear_history)
         return {
             "message": "quick analysis succeeded!",
             "fase": fase_cfg.nombre,
