@@ -469,7 +469,9 @@ function App() {
     if (isDebateActive()) {
       setPendingNavigation(() => () => {
         freezeLiveDebate();
-        navigationFn();
+        window.setTimeout(() => {
+          navigationFn();
+        }, 450);
       });
       setShowExitConfirm(true);
     } else {

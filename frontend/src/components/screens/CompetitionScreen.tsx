@@ -146,6 +146,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   );
 
   const { audioError, isRecording } = useAutoAudioRecording({
+    debateCode,
     onRecordingComplete: handleRecordingReady,
   });
 

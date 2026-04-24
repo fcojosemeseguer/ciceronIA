@@ -1,14 +1,23 @@
 /**
- * Hook compuesto para manejar grabación automática durante rondas
- * Ahora integra análisis en tiempo real
+ * Hook compuesto para manejar grabación automática durante rondas.
+ * Si una intervención se pausa y luego se retoma, acumula segmentos y
+ * solo envía un WAV final cuando la intervención termina de verdad.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAudioRecorder } from './useAudioRecorder';
 import { useDebateStore } from '../store/debateStore';
 import { AudioRecording } from '../types';
+import {
+  appendLiveDebateDraftSegment,
+  clearLiveDebateDraft,
+  getLiveDebateDraftMeta,
+  loadLiveDebateDraft,
+} from '../utils/debatePersistence';
+import { mergeAudioSegmentsToWav } from '../utils/audioProcessing';
 
 interface UseAutoAudioRecordingProps {
+  debateCode?: string;
   onRecordingComplete?: (recording: AudioRecording) => void;
 }
 
@@ -17,10 +26,22 @@ interface UseAutoAudioRecordingReturn {
   audioError: string | null;
 }
 
-export const useAutoAudioRecording = (props?: UseAutoAudioRecordingProps): UseAutoAudioRecordingReturn => {
+interface LiveRoundSnapshot {
+  team: AudioRecording['team'];
+  roundType: AudioRecording['roundType'];
+  order: number;
+}
+
+const buildRoundId = (round: LiveRoundSnapshot | null | undefined) =>
+  round ? `${round.team}-${round.roundType}-${round.order}` : '';
+
+export const useAutoAudioRecording = (
+  props?: UseAutoAudioRecordingProps
+): UseAutoAudioRecordingReturn => {
   const { isRecording, startRecording, stopRecording, error } = useAudioRecorder();
   const {
     state: debateState,
+    currentRoundIndex,
     isTimerRunning,
     timeRemaining,
     getCurrentRound,
@@ -30,94 +51,214 @@ export const useAutoAudioRecording = (props?: UseAutoAudioRecordingProps): UseAu
 
   const recordingStartedRef = useRef(false);
   const isStoppingRef = useRef(false);
-  const currentRoundRef = useRef(getCurrentRound());
-  const lastRoundIdRef = useRef<string>('');
+  const activeRoundRef = useRef<LiveRoundSnapshot | null>(null);
+  const finalizedRoundIdRef = useRef<string>('');
+  const memoryDraftSegmentsRef = useRef<AudioRecording[]>([]);
+
+  const consumeDraftSegments = useCallback(
+    async (round: LiveRoundSnapshot) => {
+      const roundId = buildRoundId(round);
+      let persistedSegments: Blob[] = [];
+      let persistedDuration = 0;
+
+      if (props?.debateCode) {
+        const draft = await loadLiveDebateDraft(props.debateCode);
+        if (draft?.roundId === roundId) {
+          persistedSegments = draft.segments.map((segment) => segment.blob);
+          persistedDuration = draft.totalDuration;
+          await clearLiveDebateDraft(props.debateCode);
+        }
+      } else {
+        const matchingSegments = memoryDraftSegmentsRef.current.filter(
+          (segment) =>
+            segment.team === round.team &&
+            segment.roundType === round.roundType &&
+            segment.order === round.order
+        );
+
+        persistedSegments = matchingSegments
+          .map((segment) => segment.blob)
+          .filter((blob): blob is Blob => Boolean(blob));
+        persistedDuration = matchingSegments.reduce((total, segment) => total + segment.duration, 0);
+        memoryDraftSegmentsRef.current = [];
+      }
+
+      return {
+        persistedSegments,
+        persistedDuration,
+      };
+    },
+    [props?.debateCode]
+  );
+
+  const persistPausedSegment = useCallback(
+    async (round: LiveRoundSnapshot, segment: AudioRecording) => {
+      const segmentBlob = segment.blob;
+      if (!segmentBlob) return;
+
+      const normalizedSegment: AudioRecording = {
+        ...segment,
+        team: round.team,
+        roundType: round.roundType,
+        order: round.order,
+      };
+
+      if (props?.debateCode) {
+        await appendLiveDebateDraftSegment(
+          {
+            debateCode: props.debateCode,
+            roundId: buildRoundId(round),
+            team: round.team,
+            roundType: round.roundType,
+            order: round.order,
+          },
+          {
+            id: normalizedSegment.id,
+            blob: segmentBlob,
+            duration: normalizedSegment.duration,
+            createdAt: normalizedSegment.timestamp,
+          }
+        );
+        return;
+      }
+
+      memoryDraftSegmentsRef.current = [...memoryDraftSegmentsRef.current, normalizedSegment];
+    },
+    [props?.debateCode]
+  );
+
+  const finalizeRoundRecording = useCallback(
+    async (round: LiveRoundSnapshot, latestSegment: AudioRecording | null) => {
+      const { persistedSegments, persistedDuration } = await consumeDraftSegments(round);
+      const latestBlob = latestSegment?.blob ? [latestSegment.blob] : [];
+      const allSegments = [...persistedSegments, ...latestBlob];
+      const totalDuration = persistedDuration + (latestSegment?.duration || 0);
+
+      if (allSegments.length === 0) {
+        return;
+      }
+
+      const mergedBlob = await mergeAudioSegmentsToWav(allSegments);
+      const recording: AudioRecording = {
+        id: `recording_${Date.now()}`,
+        team: round.team,
+        roundType: round.roundType,
+        order: round.order,
+        timestamp: latestSegment?.timestamp || new Date().toISOString(),
+        duration: totalDuration,
+        blob: mergedBlob,
+        url: URL.createObjectURL(mergedBlob),
+      };
+
+      addRecording(recording);
+      addToAnalysisQueue(recording.id);
+      props?.onRecordingComplete?.(recording);
+    },
+    [addRecording, addToAnalysisQueue, consumeDraftSegments, props]
+  );
 
   useEffect(() => {
-    currentRoundRef.current = getCurrentRound();
-  }, [getCurrentRound]);
+    if (!props?.debateCode) return;
 
-  // Generar ID único para la ronda actual
-  const getCurrentRoundId = () => {
-    const round = getCurrentRound();
-    return round ? `${round.team}-${round.roundType}-${round.order}` : '';
-  };
+    const currentRound = getCurrentRound();
+    const currentRoundId = buildRoundId(currentRound);
+    const persistedDraft = getLiveDebateDraftMeta(props.debateCode);
 
-  // Iniciar grabación cuando comienza un turno
+    if (persistedDraft && persistedDraft.roundId !== currentRoundId) {
+      void clearLiveDebateDraft(props.debateCode);
+    }
+  }, [currentRoundIndex, getCurrentRound, props?.debateCode]);
+
   useEffect(() => {
-    // No iniciar si estamos deteniendo una grabación
+    if (!error && !isRecording) return;
+    if (error) {
+      recordingStartedRef.current = false;
+      isStoppingRef.current = false;
+    }
+  }, [error, isRecording]);
+
+  useEffect(() => {
     if (isStoppingRef.current) return;
-    
-    // No iniciar si ya hay una grabación en progreso
     if (isRecording || recordingStartedRef.current) return;
-    
-    // Solo iniciar si el debate está corriendo y el timer está activo
     if (debateState !== 'running' || !isTimerRunning) return;
 
-    const currentRoundId = getCurrentRoundId();
-    
-    // Evitar iniciar grabación duplicada para la misma ronda
-    if (currentRoundId === lastRoundIdRef.current) return;
+    const currentRound = getCurrentRound();
+    if (!currentRound) return;
 
-    startRecording();
+    const currentRoundId = buildRoundId(currentRound);
+    if (!currentRoundId || currentRoundId === finalizedRoundIdRef.current) return;
+
+    activeRoundRef.current = {
+      team: currentRound.team,
+      roundType: currentRound.roundType,
+      order: currentRound.order,
+    };
+
     recordingStartedRef.current = true;
-    lastRoundIdRef.current = currentRoundId;
-  }, [debateState, isTimerRunning, isRecording, startRecording, getCurrentRound]);
+    void startRecording();
+  }, [debateState, getCurrentRound, isRecording, isTimerRunning, startRecording]);
 
-  // Detener grabación cuando:
-  // 1. El tiempo llega a 0
-  // 2. Se pausa el debate
-  // 3. Se cambia de turno
   useEffect(() => {
-    // Solo detener si estamos grabando y no estamos ya deteniendo
     if (!isRecording || !recordingStartedRef.current || isStoppingRef.current) return;
 
-    // Condiciones para detener: tiempo en 0, pausado, o timer detenido
-    const shouldStop = timeRemaining === 0 || debateState === 'paused' || !isTimerRunning;
-    
-    if (!shouldStop) return;
+    const activeRound = activeRoundRef.current;
+    if (!activeRound) return;
 
-    // Marcar que estamos deteniendo para evitar condiciones de carrera
+    const activeRoundId = buildRoundId(activeRound);
+    const currentRound = getCurrentRound();
+    const currentRoundId = buildRoundId(currentRound);
+    const roundChanged = Boolean(currentRoundId && currentRoundId !== activeRoundId);
+    const shouldFinalize = timeRemaining === 0 || roundChanged || debateState === 'finished';
+    const shouldPause = !shouldFinalize && (debateState === 'paused' || !isTimerRunning);
+
+    if (!shouldFinalize && !shouldPause) return;
+
     isStoppingRef.current = true;
 
-    stopRecording().then((recording) => {
-      if (recording && currentRoundRef.current) {
-        // Validar duración mínima (evitar grabaciones de 0 segundos)
-        if (recording.duration < 1) {
-          console.warn('Grabación demasiado corta, descartando:', recording.duration);
-          isStoppingRef.current = false;
-          recordingStartedRef.current = false;
-          return;
-        }
+    void stopRecording()
+      .then(async (segment) => {
+        const validSegment =
+          segment && segment.duration >= 1
+            ? {
+                ...segment,
+                team: activeRound.team,
+                roundType: activeRound.roundType,
+                order: activeRound.order,
+              }
+            : null;
 
-        // Actualizar información de la grabación
-        recording.team = currentRoundRef.current.team;
-        recording.roundType = currentRoundRef.current.roundType;
-        recording.order = currentRoundRef.current.order;
-
-        // Guardar en el store
-        addRecording(recording);
-        
-        // Añadir a cola de análisis
-        addToAnalysisQueue(recording.id);
-        
-        // Notificar que la grabación está lista para análisis
-        if (props?.onRecordingComplete) {
-          props.onRecordingComplete(recording);
+        if (shouldFinalize) {
+          finalizedRoundIdRef.current = activeRoundId;
+          await finalizeRoundRecording(activeRound, validSegment);
+        } else if (validSegment) {
+          await persistPausedSegment(activeRound, validSegment);
+          finalizedRoundIdRef.current = '';
         }
-      }
-      
-      // Resetear flags después de un pequeño delay para evitar iniciar inmediatamente
-      setTimeout(() => {
+      })
+      .catch((stopError) => {
+        console.error('Error al detener la grabación automática:', stopError);
+      })
+      .finally(() => {
         isStoppingRef.current = false;
         recordingStartedRef.current = false;
-      }, 500);
-    });
-  }, [timeRemaining, debateState, isTimerRunning, isRecording, stopRecording, addRecording, addToAnalysisQueue, props?.onRecordingComplete]);
+
+        if (shouldFinalize) {
+          activeRoundRef.current = null;
+        }
+      });
+  }, [
+    debateState,
+    finalizeRoundRecording,
+    getCurrentRound,
+    isRecording,
+    isTimerRunning,
+    persistPausedSegment,
+    stopRecording,
+    timeRemaining,
+  ]);
 
   return {
     isRecording,
     audioError: error,
   };
 };
-
