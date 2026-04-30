@@ -1,7 +1,19 @@
 from typing import Literal, Optional
 
-from fastapi import File, Form, UploadFile
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from fastapi import File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+
+def _raise_form_validation_error(exc: ValidationError) -> None:
+    detail = [
+        {
+            "loc": ["body", *error.get("loc", [])],
+            "msg": error.get("msg", "invalid input"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+    raise HTTPException(status_code=422, detail=detail) from exc
 
 
 class ResourceListQuery(BaseModel):
@@ -46,13 +58,16 @@ class AnalysisJobCreateData(BaseModel):
         num_speakers: int = Form(...),
         file: UploadFile = File(...),
     ) -> "AnalysisJobCreateData":
-        return cls(
-            fase=fase,
-            postura=postura,
-            orador=orador,
-            num_speakers=num_speakers,
-            file=file,
-        )
+        try:
+            return cls(
+                fase=fase,
+                postura=postura,
+                orador=orador,
+                num_speakers=num_speakers,
+                file=file,
+            )
+        except ValidationError as exc:
+            _raise_form_validation_error(exc)
 
 
 class AnalysisJobStatusResponse(BaseModel):
