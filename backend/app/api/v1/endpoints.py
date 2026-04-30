@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
@@ -37,9 +36,7 @@ from app.api.v1.models import (
 from app.core.database import (
     build_project_dashboard_summary,
     check_user,
-    create_analysis,
     create_project,
-    create_project_segment,
     create_project_share_link,
     create_user,
     delete_project_for_user,
@@ -56,10 +53,18 @@ from app.core.database import (
     get_user_code,
     list_project_share_links,
     revoke_project_share_link,
-    save_metrics,
-    save_transcription,
 )
-from app.processors.pipeline import DebateFase, Postura, create_chat
+from app.services.analysis_runtime import (
+    ANALYSIS_PIPELINE_LOCK,
+    build_metrics_summary,
+    build_transcript_preview,
+    chats,
+    get_chat,
+    run_project_analysis,
+    upct_phase_enum_by_id,
+    upct_postura_enum_by_value,
+)
+from app.processors.pipeline import create_chat
 from app.services.metrics import process_complete_analysis
 from data.debate_types import get_debate_type, list_debate_types
 
@@ -86,50 +91,10 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
 
-chats = {}
-ANALYSIS_PIPELINE_LOCK = asyncio.Lock()
-
-upct_phase_enum_by_id = {
-    "introduccion": DebateFase.INTRO,
-    "refutacion_1": DebateFase.REF1,
-    "refutacion_2": DebateFase.REF2,
-    "conclusion": DebateFase.CONCLUSION,
-    "final": DebateFase.FINAL,
-}
-
-upct_postura_enum_by_value = {
-    "A Favor": Postura.FAVOR,
-    "En Contra": Postura.CONTRA,
-}
-
-KEY_METRICS_NAMES = [
-    "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",
-    "loudness_sma3_amean",
-    "loudness_sma3_stddevNorm",
-    "loudnessPeaksPerSec",
-    "VoicedSegmentsPerSec",
-    "MeanUnvoicedSegmentLength",
-    "jitterLocal_sma3nz_amean",
-    "shimmerLocaldB_sma3nz_amean",
-]
-
-
-def get_chat(project_code):
-    return chats.get(project_code)
-
 
 def _store_uploaded_file(upload: UploadFile, destination: Path) -> None:
     with destination.open("wb") as buffer:
         shutil.copyfileobj(upload.file, buffer)
-
-
-def _persist_analysis_artifacts(
-    file_path: str,
-    transcription: list[dict],
-    metrics: dict,
-) -> None:
-    save_transcription(file_path, transcription, "")
-    save_metrics(file_path, metrics)
 
 
 def _normalize_text(value: str) -> str:
@@ -225,24 +190,6 @@ def _resolve_postura_or_422(debate_config, postura_input: str) -> str:
         status_code=422,
         detail=f"invalid postura '{postura_input}'. valid values: {valid_posturas}",
     )
-
-
-def _build_metrics_summary(metrics: dict) -> dict:
-    summary = {}
-    for speaker, speaker_metrics in metrics.items():
-        summary[speaker] = {
-            metric_name: speaker_metrics.get(metric_name)
-            for metric_name in KEY_METRICS_NAMES
-            if metric_name in speaker_metrics
-        }
-    return summary
-
-
-def _build_transcript_preview(transcription: list[dict], max_len: int = 280) -> str:
-    full_text = " ".join(seg.get("text", "") for seg in transcription).strip()
-    if len(full_text) <= max_len:
-        return full_text
-    return full_text[:max_len].rstrip() + "..."
 
 
 def _prepare_segments_for_response(
@@ -402,7 +349,7 @@ def _build_legacy_segments(
             transcript_items, metrics_items = _parse_legacy_prompt(legacy_prompts[idx])
 
         transcript_preview = (
-            _build_transcript_preview(transcript_items) if transcript_items else ""
+            build_transcript_preview(transcript_items) if transcript_items else ""
         )
         recommendation = None
         if idx < len(legacy_ai_messages):
@@ -436,7 +383,7 @@ def _build_legacy_segments(
                     "score_percent": score_percent,
                     "recommendation": recommendation,
                 },
-                "metrics_summary": _build_metrics_summary(metrics_items),
+                "metrics_summary": build_metrics_summary(metrics_items),
                 "metrics_raw": metrics_items,
                 "transcript_preview": transcript_preview,
                 "transcript": transcript_items,
@@ -704,127 +651,20 @@ async def analyse(
         # El pipeline de análisis usa librerías CPU/GPU, modelos compartidos y TinyDB,
         # así que lo sacamos del event loop y evitamos acceso concurrente inseguro.
         async with ANALYSIS_PIPELINE_LOCK:
-            if chats.get(project["code"]) is None:
-                chats[project["code"]] = create_chat(
-                    project["code"],
-                    project["code"],
-                    debate_type_config=debate_config,
-                )
-            chat = chats[project["code"]]
-
-            analysis_data = await run_in_threadpool(
-                process_complete_analysis,
-                str(file_path),
-                data.num_speakers,
-            )
-            transcription = analysis_data["transcript"]
-            metrics = analysis_data["metrics"]
-
-            await run_in_threadpool(
-                _persist_analysis_artifacts,
-                str(file_path),
-                transcription,
-                metrics,
+            result = await run_in_threadpool(
+                run_project_analysis,
+                project=project,
+                user_code=user_code,
+                debate_type_id=debate_type_id,
+                debate_config=debate_config,
+                fase_cfg=fase_cfg,
+                postura_str=postura_str,
+                orador=data.orador,
+                num_speakers=data.num_speakers,
+                file_path=str(file_path),
             )
 
-            duracion = None
-            if transcription:
-                duracion = transcription[-1]["end"] - transcription[0]["start"]
-
-            if debate_type_id == "upct" and fase_cfg.id in upct_phase_enum_by_id:
-                fase_arg = upct_phase_enum_by_id[fase_cfg.id]
-                postura_arg = upct_postura_enum_by_value[postura_str]
-            else:
-                fase_arg = fase_cfg.id
-                postura_arg = postura_str
-
-            resultado = await run_in_threadpool(
-                chat.send_evaluation,
-                fase_arg,
-                postura_arg,
-                data.orador,
-                transcription,
-                metrics,
-                duracion,
-            )
-
-            criterios = []
-            total = 0
-            for criterio, nota in resultado.puntuaciones.items():
-                anotacion = resultado.anotaciones.get(criterio, "")
-                criterios.append(
-                    {"criterio": criterio, "nota": nota, "anotacion": anotacion}
-                )
-                total += nota
-
-            max_total = len(resultado.puntuaciones) * debate_config.escala_max
-            score_percent = (
-                round((total / max_total) * 100, 2) if max_total > 0 else 0.0
-            )
-
-            legacy_saved = await run_in_threadpool(
-                create_analysis,
-                {
-                    "fase": resultado.fase,
-                    "postura": resultado.postura,
-                    "orador": resultado.orador,
-                    "criterios": criterios,
-                    "total": total,
-                    "max_total": max_total,
-                    "project_code": project["code"],
-                    "debate_type": debate_type_id,
-                },
-            )
-            if not legacy_saved:
-                raise HTTPException(
-                    status_code=500, detail="error while saving legacy analysis"
-                )
-
-            segment_payload = {
-                "segment_id": str(uuid4()),
-                "project_code": project["code"],
-                "user_code": user_code,
-                "file_path": str(file_path),
-                "debate_type": debate_type_id,
-                "fase_id": fase_cfg.id,
-                "fase_nombre": fase_cfg.nombre,
-                "postura": postura_str,
-                "orador": data.orador,
-                "num_speakers": data.num_speakers,
-                "duration_seconds": duracion,
-                "transcript": transcription,
-                "transcript_preview": _build_transcript_preview(transcription),
-                "metrics_summary": _build_metrics_summary(metrics),
-                "metrics_raw": metrics,
-                "analysis": {
-                    "criterios": criterios,
-                    "total": total,
-                    "max_total": max_total,
-                    "score_percent": score_percent,
-                },
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            segment_saved = await run_in_threadpool(
-                create_project_segment,
-                segment_payload,
-            )
-            if not segment_saved:
-                raise HTTPException(
-                    status_code=500, detail="error while saving project segment"
-                )
-
-        return {
-            "message": "analysis succeeded!",
-            "fase": fase_cfg.nombre,
-            "fase_id": fase_cfg.id,
-            "postura": resultado.postura,
-            "orador": resultado.orador,
-            "criterios": criterios,
-            "total": total,
-            "max_total": max_total,
-            "score_percent": score_percent,
-            "debate_type": debate_type_id,
-        }
+        return result
 
     except HTTPException:
         raise

@@ -13,6 +13,7 @@ audios_transcription_table = db.table('audios_transcription')
 audios_metrics_table = db.table('audios_metrics')
 project_segments_table = db.table('project_segments')
 project_share_links_table = db.table('project_share_links')
+analysis_jobs_table = db.table('analysis_jobs')
 User = Query()
 
 
@@ -71,6 +72,7 @@ def create_project(data: dict):
         team_a_name = data.get("team_a_name", "Equipo A")
         team_b_name = data.get("team_b_name", "Equipo B")
         debate_topic = data.get("debate_topic", "")
+        created_at = datetime.now(timezone.utc).isoformat()
         project_code = str(uuid4())
         result = projects_table.insert({
             'name': name,
@@ -80,7 +82,8 @@ def create_project(data: dict):
             'debate_type': debate_type,
             'team_a_name': team_a_name,
             'team_b_name': team_b_name,
-            'debate_topic': debate_topic
+            'debate_topic': debate_topic,
+            'created_at': created_at,
         })
         return project_code if project_code else None
     except Exception as e:
@@ -148,6 +151,16 @@ def get_project_by_code(project_code: str):
     except Exception as e:
         print(f"error {e}")
         return None
+
+
+def list_projects_for_user(user_code: str) -> list[dict]:
+    try:
+        projects = projects_table.search(User.user_code == user_code)
+        projects.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return projects
+    except Exception as e:
+        print(f"error {e}")
+        return []
 
 
 def get_project_for_user(user_code: str, project_code: str):
@@ -244,6 +257,16 @@ def create_project_segment(data: dict) -> bool:
     except Exception as e:
         print(f"unexpected error: {e}")
         return False
+
+
+def get_project_segment(project_code: str, segment_id: str) -> dict | None:
+    try:
+        return project_segments_table.get(
+            (User.project_code == project_code) & (User.segment_id == segment_id)
+        )
+    except Exception as e:
+        print(f"error {e}")
+        return None
 
 
 def get_project_segments(
@@ -390,6 +413,48 @@ def get_project_share_link_by_token_hash(token_hash: str):
     except Exception as e:
         print(f"error {e}")
         return None
+
+
+def create_analysis_job(data: dict) -> bool:
+    try:
+        analysis_jobs_table.insert(data)
+        return True
+    except Exception as e:
+        print(f"unexpected error: {e}")
+        return False
+
+
+def get_analysis_job(job_id: str) -> dict | None:
+    try:
+        return analysis_jobs_table.get(User.job_id == job_id)
+    except Exception as e:
+        print(f"error {e}")
+        return None
+
+
+def update_analysis_job(job_id: str, patch: dict) -> bool:
+    try:
+        updated = analysis_jobs_table.update(patch, User.job_id == job_id)
+        return bool(updated)
+    except Exception as e:
+        print(f"error {e}")
+        return False
+
+
+def list_analysis_jobs(
+    project_code: str,
+    limit: int = 20,
+    offset: int = 0,
+):
+    try:
+        jobs = analysis_jobs_table.search(User.project_code == project_code)
+        jobs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        total = len(jobs)
+        items = jobs[offset: offset + limit]
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+    except Exception as e:
+        print(f"error {e}")
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
 
 def get_project_chat_human_messages(project_code: str) -> list[str]:
