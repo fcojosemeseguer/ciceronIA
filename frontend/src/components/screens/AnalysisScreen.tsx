@@ -24,6 +24,7 @@ import {
   buildDurationLookup,
   DashboardSlot,
   getDashboardSlotKey,
+  getTeamFromPosture,
   mergeCriteriaNotes,
 } from '../../utils/dashboardViewModel';
 import { useDashboardShareLink } from '../../hooks/useDashboardShareLink';
@@ -374,6 +375,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
       fallbackTeamAName,
       fallbackTeamBName
     );
+    const segmentLookup = new Map<string, NonNullable<ProjectDashboardResponse['segments']['items']>>();
+
+    (dashboardData?.segments.items || []).forEach((segment) => {
+      const team = getTeamFromPosture(segment.postura, fallbackTeamAName, fallbackTeamBName);
+      if (!team) return;
+
+      const key = getDashboardSlotKey(segment.fase_nombre, team);
+      segmentLookup.set(key, [...(segmentLookup.get(key) || []), segment]);
+    });
 
     return uploadsByFase.flatMap(({ uploads: faseUploads }) =>
       faseUploads.map((upload) => {
@@ -407,6 +417,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
           isCurrent: false,
           isSelectable: status !== 'pending' || Boolean(upload.file) || Boolean(upload.persistedFileName),
           results: slotResults,
+          segments: segmentLookup.get(key) || [],
         };
       })
     );

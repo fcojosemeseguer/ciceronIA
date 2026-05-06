@@ -114,6 +114,19 @@ export const DebateDetailsScreen: React.FC<DebateDetailsScreenProps> = ({ debate
     () => buildDurationLookup(dashboard?.segments.items, teamAName, teamBName),
     [dashboard?.segments.items, teamAName, teamBName]
   );
+  const segmentLookup = useMemo(() => {
+    const lookup = new Map<string, NonNullable<ProjectDashboardResponse['segments']['items']>>();
+
+    (dashboard?.segments.items || []).forEach((segment) => {
+      const team = getTeamFromPosture(segment.postura, teamAName, teamBName);
+      if (!team) return;
+
+      const key = getDashboardSlotKey(segment.fase_nombre, team);
+      lookup.set(key, [...(lookup.get(key) || []), segment]);
+    });
+
+    return lookup;
+  }, [dashboard?.segments.items, teamAName, teamBName]);
 
   const slots: DashboardSlot[] = useMemo(
     () =>
@@ -138,10 +151,11 @@ export const DebateDetailsScreen: React.FC<DebateDetailsScreenProps> = ({ debate
             isCurrent: false,
             isSelectable: results.length > 0,
             results,
+            segments: segmentLookup.get(key) || [],
           };
         })
       ),
-    [analyses, durationLookup, phaseSequence, teamAName, teamBName]
+    [analyses, durationLookup, phaseSequence, segmentLookup, teamAName, teamBName]
   );
 
   const selectedSlot = useMemo(

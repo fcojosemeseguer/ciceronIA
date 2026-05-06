@@ -224,6 +224,19 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
     () => buildDurationLookup(dashboardData?.segments.items, teamAName, teamBName),
     [dashboardData?.segments.items, teamAName, teamBName]
   );
+  const segmentLookup = useMemo(() => {
+    const lookup = new Map<string, NonNullable<ProjectDashboardResponse['segments']['items']>>();
+
+    (dashboardData?.segments.items || []).forEach((segment) => {
+      const team = getTeamFromPosture(segment.postura, teamAName, teamBName);
+      if (!team) return;
+
+      const key = getDashboardSlotKey(segment.fase_nombre, team);
+      lookup.set(key, [...(lookup.get(key) || []), segment]);
+    });
+
+    return lookup;
+  }, [dashboardData?.segments.items, teamAName, teamBName]);
 
   const roundsWithMeta = useMemo(
     () =>
@@ -283,6 +296,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
           isCurrent: currentRoundIndex === roundMeta.idx,
           isSelectable: hasReachedSlot || isAnalyzingSlot || isRecordingSlot,
           results: slotResults,
+          segments: segmentLookup.get(roundMeta.key) || [],
         };
       }),
     [
@@ -295,6 +309,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
       teamAName,
       teamBName,
       durationLookup,
+      segmentLookup,
     ]
   );
 

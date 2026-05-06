@@ -13,6 +13,7 @@ export interface DashboardSlot {
   isCurrent?: boolean;
   isSelectable?: boolean;
   results: AnalysisResult[];
+  segments?: ProjectSegment[];
 }
 
 export interface DashboardCriterionItem {

@@ -38,8 +38,8 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
     name: '',
     description: '',
     debate_type: 'upct',
-    team_a_name: 'A favor',
-    team_b_name: 'En contra',
+    team_a_name: '',
+    team_b_name: '',
     debate_topic: '',
     mode,
   });
@@ -187,6 +187,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                   onChange={(e) => handleFieldChange('name', e.target.value)}
                   className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
+                  placeholder="Nombre del debate"
                 />
               </div>
 
@@ -200,6 +201,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                   onChange={(e) => handleFieldChange('debate_topic', e.target.value)}
                   className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
+                  placeholder="Tema del debate"
                 />
               </div>
 
@@ -214,7 +216,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     onChange={(e) => handleFieldChange('team_a_name', e.target.value)}
                     className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
                     style={fieldStyle}
-                    placeholder="A favor"
+                    placeholder="Equipo a favor"
                   />
                   <input
                     type="text"
@@ -222,7 +224,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     onChange={(e) => handleFieldChange('team_b_name', e.target.value)}
                     className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
                     style={fieldStyle}
-                    placeholder="En contra"
+                    placeholder="Equipo en contra"
                   />
                 </div>
               </div>
@@ -296,6 +298,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                   rows={3}
                   className="w-full resize-none rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
+                  placeholder="Descripcion opcional"
                 />
               </div>
             </div>

@@ -11,6 +11,7 @@ import {
   Play,
 } from 'lucide-react';
 import { useUnifiedDebateStore } from '../../store';
+import { useAuthStore } from '../../store/authStore';
 import { Debate } from '../../types';
 import { BrandHeader, Breadcrumbs, LiquidGlassButton } from '../common';
 import liveIcon from '../../assets/icons/icon-envivo.svg';
@@ -21,6 +22,28 @@ interface DebatesScreenProps {
   onViewDebateDetails?: (debate: Debate) => void; // Abrir evaluacion
   onBack: () => void;
 }
+
+const TEST_DEMO_DEBATE: Debate = {
+  code: 'demo-test-debate',
+  name: 'Final Demo Ciceronia',
+  description: 'Debate de prueba con estadisticas completas para usuario test.',
+  debate_type: 'upct',
+  debate_type_name: 'UPCT',
+  team_a_name: 'Atenea Debate Club',
+  team_b_name: 'Foro Minerva',
+  debate_topic: '¿Debe regularse la inteligencia artificial generativa en las aulas?',
+  team_a_color: '#3A6EA5',
+  team_b_color: '#C44536',
+  mode: 'analysis',
+  status: 'completed',
+  user_code: 'test',
+  created_at: new Date(2026, 4, 3, 10, 0).toISOString(),
+  created_ts: new Date(2026, 4, 3, 10, 0).getTime(),
+  completed_at: new Date(2026, 4, 3, 11, 15).toISOString(),
+  winner: 'A',
+};
+
+const isTestUser = (value?: string | null) => value?.trim().toLowerCase() === 'test';
 
 export const DebatesScreen: React.FC<DebatesScreenProps> = ({
   onSelectDebate,
@@ -35,6 +58,8 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
     deleteDebate,
     clearError,
   } = useUnifiedDebateStore();
+  const { user } = useAuthStore();
+  const isDemoUser = isTestUser(user?.name) || isTestUser(user?.id) || isTestUser(user?.email);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [modeFilter, setModeFilter] = useState<'all' | 'live' | 'analysis'>('all');
@@ -43,7 +68,11 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
     fetchDebates();
   }, [fetchDebates]);
 
-  const filteredDebates = debates.filter((debate) => {
+  const visibleDebates = isDemoUser
+    ? [TEST_DEMO_DEBATE, ...debates.filter((debate) => debate.code !== TEST_DEMO_DEBATE.code)]
+    : debates;
+
+  const filteredDebates = visibleDebates.filter((debate) => {
     if (modeFilter === 'all') return true;
     return debate.mode === modeFilter;
   });
@@ -185,13 +214,15 @@ export const DebatesScreen: React.FC<DebatesScreenProps> = ({
                           className="h-7 w-7"
                           aria-hidden
                         />
-                        <button
-                          onClick={() => setShowDeleteConfirm(debate.code)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2C2C2C]/15 text-[#2C2C2C]/70 hover:opacity-90"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {debate.code !== TEST_DEMO_DEBATE.code && (
+                          <button
+                            onClick={() => setShowDeleteConfirm(debate.code)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2C2C2C]/15 text-[#2C2C2C]/70 hover:opacity-90"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 

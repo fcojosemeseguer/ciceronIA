@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { AuroraBackground, LiquidGlassButton, CardNav } from '../common';
-import { MessageSquare, Github, Linkedin, Twitter } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 interface TeamScreenProps {
   onBack: () => void;
@@ -54,35 +54,27 @@ export const TeamScreen: React.FC<TeamScreenProps> = ({ onBack, onHome, onHowItW
       bgColor: "#271E37", 
       textColor: "#fff",
       links: [
-        { label: "Nosotros", href: "#", ariaLabel: "Conocer al equipo" },
-        { label: "Contacto", href: "#", ariaLabel: "Contactar" }
+        { label: "Configuracion", href: "#", ariaLabel: "Ver configuracion" },
+        { label: "Evaluacion", href: "#", ariaLabel: "Ver evaluacion" }
       ]
     }
   ];
-  const teamMembers = [
+  const configBlocks = [
     {
-      name: 'Francisco Pérez',
-      role: 'Fundador & CEO',
-      description: 'Apasionado por el debate y la inteligencia artificial. Creador de la visión de CiceronAI.',
-      avatar: 'FP'
+      title: 'Datos generales',
+      description: 'Nombre, tema y descripcion opcional del debate.'
     },
     {
-      name: 'María García',
-      role: 'CTO',
-      description: 'Ingeniera de software especializada en IA y procesamiento de lenguaje natural.',
-      avatar: 'MG'
+      title: 'Posturas',
+      description: 'Configuracion general de los dos lados del debate.'
     },
     {
-      name: 'Carlos López',
-      role: 'Product Designer',
-      description: 'Diseñador UX/UI enfocado en crear experiencias intuitivas y atractivas.',
-      avatar: 'CL'
+      title: 'Formato',
+      description: 'Seleccion de estructura y fases de evaluacion.'
     },
     {
-      name: 'Ana Martínez',
-      role: 'Debate Coach',
-      description: 'Campeona nacional de debate con más de 10 años de experiencia en oratoria.',
-      avatar: 'AM'
+      title: 'Resultados',
+      description: 'Evaluacion final, metricas y visualizaciones.'
     }
   ];
 
@@ -125,11 +117,10 @@ export const TeamScreen: React.FC<TeamScreenProps> = ({ onBack, onHome, onHowItW
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-                Nuestro Equipo
+                Configuracion final
               </h1>
               <p className="text-lg text-white/60 max-w-2xl mx-auto">
-                Un grupo de apasionados por el debate y la tecnología trabajando para revolucionar 
-                la forma en que practicamos y evaluamos los debates.
+                Pantalla orientada a preparar el debate sin personas, fotos ni datos de ejemplo.
               </p>
             </div>
 
@@ -146,53 +137,28 @@ export const TeamScreen: React.FC<TeamScreenProps> = ({ onBack, onHome, onHowItW
               ))}
             </div>
 
-            {/* Miembros del equipo */}
+            {/* Configuracion */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-16">
-              {teamMembers.map((member, index) => (
+              {configBlocks.map((block, index) => (
                 <div 
                   key={index}
                   className="p-6 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#FF6B00] to-[#00E5FF] flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold text-lg">{member.avatar}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{member.name}</h3>
-                      <p className="text-[#00E5FF] text-sm mb-2">{member.role}</p>
-                      <p className="text-white/60 text-sm">{member.description}</p>
-                    </div>
+                  <div>
+                    <p className="mb-2 text-sm uppercase tracking-[0.14em] text-white/40">Bloque {index + 1}</p>
+                    <h3 className="text-lg font-semibold text-white">{block.title}</h3>
+                    <p className="mt-2 text-white/60 text-sm">{block.description}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Contacto */}
+            {/* Enfoque */}
             <div className="text-center p-8 rounded-2xl backdrop-blur-sm bg-white/5 border border-white/10 mb-16">
-              <h2 className="text-2xl font-bold text-white mb-4">¿Quieres contactarnos?</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">Listo para configurar</h2>
               <p className="text-white/60 mb-6">
-                Estamos siempre abiertos a colaboraciones, sugerencias y nuevas ideas.
+                El flujo se centra en preparar el debate y avanzar directamente a la evaluacion.
               </p>
-              <div className="flex justify-center gap-4">
-                <a 
-                  href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                >
-                  <Twitter className="w-5 h-5 text-white/70" />
-                </a>
-                <a 
-                  href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                >
-                  <Linkedin className="w-5 h-5 text-white/70" />
-                </a>
-                <a 
-                  href="#" 
-                  className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                >
-                  <Github className="w-5 h-5 text-white/70" />
-                </a>
-              </div>
             </div>
 
             {/* CTA */}

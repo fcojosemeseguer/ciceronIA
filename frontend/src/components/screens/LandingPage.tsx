@@ -16,7 +16,7 @@ interface LandingPageProps {
 const howItWorksSteps = [
   {
     title: '1. Configura tu debate',
-    text: 'Define tema, equipos y formato en segundos. Todo queda preparado para empezar sin friccion.',
+    text: 'Completa los datos generales del debate y deja preparado el formato antes de empezar.',
   },
   {
     title: '2. Debate en vivo o analisis',
@@ -28,11 +28,13 @@ const howItWorksSteps = [
   },
 ];
 
-const teamMembers = [
-  { name: 'Miembro 1', role: 'Producto', bio: 'Vision de producto, experiencia y flujo general.' },
-  { name: 'Miembro 2', role: 'IA / Datos', bio: 'Analisis, scoring y modelos de evaluacion.' },
-  { name: 'Miembro 3', role: 'Frontend', bio: 'Interfaz, rendimiento y experiencia visual.' },
-  { name: 'Miembro 4', role: 'Backend', bio: 'APIs, persistencia y estabilidad del sistema.' },
+const finalConfigItems = [
+  'Nombre del debate',
+  'Tema general',
+  'Posturas o equipos',
+  'Formato de evaluacion',
+  'Colores de referencia',
+  'Descripcion opcional',
 ];
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin, onOpenSettings }) => {
@@ -96,23 +98,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
             <div className="mb-10">
               <h2 className="text-[44px] leading-none text-[#2C2C2C] sm:text-[56px]">Como funciona</h2>
               <p className="mt-3 max-w-[760px] text-[19px] text-[#4B3F1D] sm:text-[22px]">
-                Flujo directo para preparar, ejecutar y evaluar debates. Aqui puedes colocar capturas o ilustraciones despues.
+                Flujo directo para preparar, ejecutar y evaluar debates desde una configuracion general.
               </p>
             </div>
 
             <div className="space-y-6">
               {howItWorksSteps.map((step, index) => (
-                <article key={step.title} className="grid gap-4 rounded-2xl border-[3px] border-[#1C1D1F] bg-[#F5F5F3] p-4 sm:grid-cols-[1.1fr_1fr] sm:p-5">
+                <article key={step.title} className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#F5F5F3] p-4 sm:p-5">
                   <div>
                     <h3 className="text-[30px] leading-none text-[#2C2C2C] sm:text-[36px]">{step.title}</h3>
                     <p className="mt-3 text-[18px] leading-relaxed text-[#5E5E5E] sm:text-[20px]">{step.text}</p>
                     <div className="mt-4 inline-flex rounded-full border border-[#1C1D1F] bg-white px-3 py-1 text-sm font-medium text-[#2C2C2C]">
                       Paso {index + 1}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border-2 border-dashed border-[#1C1D1F]/40 bg-white p-4">
-                    <div className="flex h-full min-h-[160px] items-center justify-center rounded-lg bg-[#F5F5F3] text-center text-[#7A7A7A]">
-                      Placeholder imagen explicativa {index + 1}
                     </div>
                   </div>
                 </article>
@@ -121,30 +118,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
           </div>
         </section>
 
-        <section id="team" className="bg-[#3A7D44]">
+        <section id="final-config" className="bg-[#3A7D44]">
           <div className="mx-auto w-full max-w-[1240px] px-5 py-14 sm:px-8 sm:py-16">
             <div className="mb-10">
-              <h2 className="text-[44px] leading-none text-[#F5F5F3] sm:text-[56px]">Equipo</h2>
+              <h2 className="text-[44px] leading-none text-[#F5F5F3] sm:text-[56px]">Configuracion final</h2>
               <p className="mt-3 max-w-[760px] text-[19px] text-[#E7F3E9] sm:text-[22px]">
-                Apartado para presentar al equipo y la vision del proyecto.
+                Una unica pantalla para dejar el debate listo sin ejemplos, fotos ni datos personales.
               </p>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              {teamMembers.map((member, index) => (
-                <article key={member.name} className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#F5F5F3] p-5">
-                  <div className="mb-4 flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-[#1C1D1F]/35 bg-white text-sm text-[#7A7A7A]">
-                      Foto
-                    </div>
-                    <div>
-                      <h3 className="text-[28px] leading-none text-[#2C2C2C]">{member.name}</h3>
-                      <p className="mt-1 text-[18px] text-[#3A7D44]">{member.role}</p>
-                    </div>
-                  </div>
-                  <p className="text-[17px] leading-relaxed text-[#5E5E5E]">{member.bio}</p>
-                  <div className="mt-4 rounded-xl border border-[#1C1D1F]/20 bg-white px-3 py-2 text-sm text-[#7A7A7A]">
-                    Placeholder descripcion ampliada / enlaces del miembro {index + 1}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {finalConfigItems.map((item, index) => (
+                <article key={item} className="rounded-2xl border-[3px] border-[#1C1D1F] bg-[#F5F5F3] p-5">
+                  <p className="text-sm uppercase tracking-[0.14em] text-[#2C2C2C]/55">Campo {index + 1}</p>
+                  <h3 className="mt-2 text-[28px] leading-none text-[#2C2C2C]">{item}</h3>
+                  <div className="mt-4 h-2 rounded-full bg-[#3A7D44]/18">
+                    <div className="h-full rounded-full bg-[#3A7D44]" style={{ width: `${60 + index * 6}%` }} />
                   </div>
                 </article>
               ))}

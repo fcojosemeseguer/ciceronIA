@@ -54,8 +54,8 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
   };
 
   const [formData, setFormData] = useState({
-    teamAName: 'A favor',
-    teamBName: 'En contra',
+    teamAName: '',
+    teamBName: '',
     debateTopic: '',
     debateDescription: '',
   });
@@ -159,7 +159,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                       value={formData.teamAName}
                       onChange={(e) => handleInputChange(e, 'teamAName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF6B00]/50 transition-colors"
-                      placeholder="Nombre de la postura a favor"
+                      placeholder="Equipo a favor"
                     />
                   </div>
 
@@ -172,7 +172,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                       value={formData.teamBName}
                       onChange={(e) => handleInputChange(e, 'teamBName')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-[#00E5FF]/50 transition-colors"
-                      placeholder="Nombre de la postura en contra"
+                      placeholder="Equipo en contra"
                     />
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                       value={formData.debateTopic}
                       onChange={(e) => handleInputChange(e, 'debateTopic')}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-colors"
-                      placeholder="Ej: ¿Debería implementarse la jornada laboral de 4 días?"
+                      placeholder="Tema del debate"
                     />
                   </div>
 
@@ -210,7 +210,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
                       onChange={(e) => handleInputChange(e, 'debateDescription')}
                       rows={3}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-colors resize-none"
-                      placeholder="Contexto o descripción adicional del debate..."
+                      placeholder="Descripcion opcional"
                     />
                   </div>
                 </div>

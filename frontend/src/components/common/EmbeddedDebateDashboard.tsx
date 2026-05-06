@@ -91,6 +91,87 @@ const getSlotFallbackMessage = (slot: DashboardSlot | null) => {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const polarPoint = (cx: number, cy: number, radius: number, angle: number) => {
+  const radians = (Math.PI * 2 * angle) - Math.PI / 2;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+};
+
+const buildRadarPath = (values: number[], radius: number) =>
+  values
+    .map((value, index) => {
+      const point = polarPoint(70, 70, radius * clamp(value / 10, 0.04, 1), index / values.length);
+      return `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    })
+    .join(' ') + ' Z';
+
+const getCriterionAverages = (results: DashboardSlot['results']) => {
+  const totals = new Map<string, { total: number; count: number }>();
+
+  results.forEach((result) => {
+    result.criterios.forEach((criterion) => {
+      const current = totals.get(criterion.criterio) || { total: 0, count: 0 };
+      totals.set(criterion.criterio, {
+        total: current.total + criterion.nota,
+        count: current.count + 1,
+      });
+    });
+  });
+
+  return Array.from(totals.entries())
+    .map(([label, value]) => ({
+      label,
+      value: value.total / Math.max(1, value.count),
+    }))
+    .slice(0, 6);
+};
+
+const getSlotMetrics = (slot: DashboardSlot | null) => {
+  const metrics = (slot?.segments || []).flatMap((segment) => {
+    const source = segment.metrics_raw && Object.keys(segment.metrics_raw).length > 0
+      ? segment.metrics_raw
+      : segment.metrics_summary;
+
+    return Object.values(source || {});
+  });
+
+  const getAverage = (keys: string[]) => {
+    const values = metrics.flatMap((item) =>
+      keys
+        .map((key) => item?.[key])
+        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    );
+
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+
+  return [
+    {
+      label: 'Tono',
+      value: getAverage(['F0semitoneFrom27.5Hz_sma3nz_stddevNorm']),
+      max: 0.3,
+    },
+    {
+      label: 'Proyección',
+      value: getAverage(['loudness_sma3_amean']),
+      max: 2,
+    },
+    {
+      label: 'Énfasis',
+      value: getAverage(['loudness_sma3_stddevNorm', 'loudnessPeaksPerSec']),
+      max: 3,
+    },
+    {
+      label: 'Ritmo',
+      value: getAverage(['VoicedSegmentsPerSec']),
+      max: 2.5,
+    },
+  ];
+};
+
 export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = ({
   slots,
   teamAName,
@@ -146,6 +227,21 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
 
   const teamAScore40 = scoreTo40(averageScore(teamAResults));
   const teamBScore40 = scoreTo40(averageScore(teamBResults));
+  const teamAAverage = averageScore(teamAResults);
+  const teamBAverage = averageScore(teamBResults);
+  const analyzedSlots = slots.filter((slot) => slot.status === 'analyzed');
+  const durationValues = analyzedSlots
+    .map((slot) => slot.durationSeconds)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const averageDuration = durationValues.length
+    ? durationValues.reduce((sum, value) => sum + value, 0) / durationValues.length
+    : null;
+  const debateLeader =
+    teamAAverage === teamBAverage
+      ? 'Empate técnico'
+      : teamAAverage > teamBAverage
+        ? teamAName
+        : teamBName;
 
   const selectedTeamAScore40 = scoreTo40(averageScore(
     [selectedSlot, peerSlot]
@@ -169,6 +265,18 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
       }),
     [slots]
   );
+
+  const teamAPath = chartPoints
+    .filter((point) => point.team === 'A')
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const teamBPath = chartPoints
+    .filter((point) => point.team === 'B')
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
+  const selectedCriterionAverages = getCriterionAverages(selectedSlot?.results || []);
+  const selectedRadarValues = selectedCriterionAverages.map((criterion) => criterion.value);
+  const selectedMetricProfile = getSlotMetrics(selectedSlot);
 
   const detailContextOpen = Boolean(selectedCriterion);
   const selectedTeamColor = selectedSlot
@@ -196,6 +304,12 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                 <div>
                   <p className="text-sm uppercase tracking-[0.12em] text-[#2C2C2C]/55">{teamAName}</p>
                   <p className="text-[30px] leading-none text-[#2C2C2C]">Marcador total</p>
+                  <div className="mt-2 h-2 w-36 rounded-full bg-[#E7E7E4]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${clamp(teamAAverage, 0, 100)}%`, background: teamAColor }}
+                    />
+                  </div>
                 </div>
                 <span
                   className="rounded-2xl px-4 py-2 text-[34px] leading-none text-white"
@@ -210,6 +324,12 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                 <div>
                   <p className="text-sm uppercase tracking-[0.12em] text-[#2C2C2C]/55">{teamBName}</p>
                   <p className="text-[30px] leading-none text-[#2C2C2C]">Marcador total</p>
+                  <div className="mt-2 h-2 w-36 rounded-full bg-[#E7E7E4]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${clamp(teamBAverage, 0, 100)}%`, background: teamBColor }}
+                    />
+                  </div>
                 </div>
                 <span
                   className="rounded-2xl px-4 py-2 text-[34px] leading-none text-white"
@@ -223,8 +343,11 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
               <div className="rounded-2xl bg-white px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm uppercase tracking-[0.12em] text-[#2C2C2C]/55">Timeline</p>
-                    <p className="text-[30px] leading-none text-[#2C2C2C]">Estado de intervenciones</p>
+                    <p className="text-sm uppercase tracking-[0.12em] text-[#2C2C2C]/55">Lectura rápida</p>
+                    <p className="text-[30px] leading-none text-[#2C2C2C]">{debateLeader}</p>
+                    <p className="mt-1 text-sm text-[#2C2C2C]/55">
+                      {analyzedSlots.length}/{slots.length} intervenciones · media {formatDashboardDuration(averageDuration)}
+                    </p>
                   </div>
                   <div className="flex flex-wrap justify-end gap-2 text-xs text-[#2C2C2C]/65">
                     {(['pending', 'recording', 'analyzing', 'analyzed'] as DashboardSlotStatus[]).map((status) => (
@@ -247,9 +370,9 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm uppercase tracking-[0.12em] text-[#2C2C2C]/55">Puntos</p>
-                  <p className="text-[30px] leading-none text-[#2C2C2C]">Evolución del dashboard</p>
+                  <p className="text-[30px] leading-none text-[#2C2C2C]">Pulso del debate</p>
                 </div>
-                <p className="text-sm text-[#2C2C2C]/55">Dots aislados</p>
+                <p className="text-sm text-[#2C2C2C]/55">Fase a fase</p>
               </div>
 
               <div className="mt-4 flex-1 rounded-[20px] bg-white px-4 py-3">
@@ -268,10 +391,25 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                       strokeWidth="1"
                     />
                   ))}
+                  {teamAPath && (
+                    <path d={teamAPath} fill="none" stroke={teamAColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                  {teamBPath && (
+                    <path d={teamBPath} fill="none" stroke={teamBColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
                   {chartPoints.map((point) => {
                     const fill = getSlotColor(point, teamAColor, teamBColor);
                     return (
                       <g key={`chart-${point.key}`}>
+                        <line
+                          x1={point.x}
+                          y1={point.y}
+                          x2={point.x}
+                          y2="122"
+                          stroke={fill}
+                          strokeOpacity="0.14"
+                          strokeWidth="2"
+                        />
                         <circle
                           cx={point.x}
                           cy={point.y}
@@ -293,10 +431,15 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                       </g>
                     );
                   })}
+                  <text x="22" y="19" fill="#2C2C2C" fontSize="7" opacity="0.48">100</text>
+                  <text x="22" y="118" fill="#2C2C2C" fontSize="7" opacity="0.48">0</text>
                 </svg>
               </div>
 
-              <p className="mt-3 text-center text-[24px] leading-none text-[#2C2C2C]">Rondas / fases</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-center text-[16px] leading-none text-[#2C2C2C]">
+                <span className="rounded-full bg-white py-2" style={{ color: teamAColor }}>{teamAName}</span>
+                <span className="rounded-full bg-white py-2" style={{ color: teamBColor }}>{teamBName}</span>
+              </div>
             </div>
           </div>
 
@@ -463,7 +606,7 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                   : 'lg:grid-cols-[0.95fr_1.55fr]'
               }`}
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid min-h-0 grid-cols-2 gap-3 overflow-y-auto pr-1">
                 <div className="rounded-[20px] bg-white p-3 text-[#1C1D1F]">
                   <p className="text-[18px] uppercase tracking-[0.1em] text-[#2C2C2C]/58">{teamAName}</p>
                   <p className="mt-2 text-[54px] leading-none">
@@ -484,7 +627,98 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                 </div>
                 <div className="rounded-[20px] bg-white p-3 text-[#1C1D1F]">
                   <p className="text-[18px] uppercase tracking-[0.1em] text-[#2C2C2C]/58">Energía</p>
-                  <p className="mt-2 text-[46px] leading-none">{Math.round(selectedSlot.avg || 0)}</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <svg viewBox="0 0 72 72" className="h-16 w-16 shrink-0">
+                      <circle cx="36" cy="36" r="28" fill="none" stroke="#ECECE9" strokeWidth="10" />
+                      <circle
+                        cx="36"
+                        cy="36"
+                        r="28"
+                        fill="none"
+                        stroke={selectedTeamColor}
+                        strokeWidth="10"
+                        strokeLinecap="round"
+                        strokeDasharray={`${clamp(selectedSlot.avg, 0, 100) * 1.76} 176`}
+                        transform="rotate(-90 36 36)"
+                      />
+                    </svg>
+                    <p className="text-[46px] leading-none">{Math.round(selectedSlot.avg || 0)}</p>
+                  </div>
+                </div>
+
+                <div className="col-span-2 rounded-[20px] bg-white p-3 text-[#1C1D1F]">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[18px] uppercase tracking-[0.1em] text-[#2C2C2C]/58">Radar de rúbrica</p>
+                    <span className="text-sm text-[#2C2C2C]/50">{selectedCriterionAverages.length || 0} criterios</span>
+                  </div>
+                  {selectedCriterionAverages.length >= 3 ? (
+                    <div className="mt-2 grid grid-cols-[140px_minmax(0,1fr)] gap-3">
+                      <svg viewBox="0 0 140 140" className="h-[140px] w-[140px]">
+                        {[22, 40, 58].map((radius) => (
+                          <polygon
+                            key={`radar-grid-${radius}`}
+                            points={selectedRadarValues
+                              .map((_, index) => {
+                                const point = polarPoint(70, 70, radius, index / selectedRadarValues.length);
+                                return `${point.x},${point.y}`;
+                              })
+                              .join(' ')}
+                            fill="none"
+                            stroke="#2C2C2C"
+                            strokeOpacity="0.12"
+                          />
+                        ))}
+                        <path d={buildRadarPath(selectedRadarValues, 58)} fill={selectedTeamColor} fillOpacity="0.22" stroke={selectedTeamColor} strokeWidth="3" />
+                        {selectedRadarValues.map((value, index) => {
+                          const point = polarPoint(70, 70, 58 * clamp(value / 10, 0.04, 1), index / selectedRadarValues.length);
+                          return <circle key={`radar-point-${index}`} cx={point.x} cy={point.y} r="3.5" fill={selectedTeamColor} />;
+                        })}
+                      </svg>
+                      <div className="min-w-0 space-y-2 self-center">
+                        {selectedCriterionAverages.slice(0, 4).map((criterion) => (
+                          <div key={`radar-label-${criterion.label}`}>
+                            <div className="mb-1 flex justify-between gap-2 text-sm text-[#2C2C2C]/65">
+                              <span className="truncate">{criterion.label}</span>
+                              <span>{criterion.value.toFixed(1)}</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-[#ECECE9]">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${clamp(criterion.value * 10, 0, 100)}%`, background: selectedTeamColor }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-[20px] leading-snug text-[#2C2C2C]/58">
+                      El radar aparecerá cuando haya al menos tres criterios puntuados.
+                    </p>
+                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {selectedMetricProfile.map((metric) => {
+                      const percent =
+                        typeof metric.value === 'number'
+                          ? clamp((metric.value / metric.max) * 100, 4, 100)
+                          : 0;
+
+                      return (
+                        <div key={`metric-${metric.label}`} className="rounded-[14px] bg-[#F3F3F1] px-3 py-2">
+                          <div className="mb-1 flex justify-between gap-2 text-xs uppercase tracking-[0.08em] text-[#2C2C2C]/50">
+                            <span>{metric.label}</span>
+                            <span>{typeof metric.value === 'number' ? metric.value.toFixed(2) : 'N/A'}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-white">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${percent}%`, background: selectedTeamColor }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -502,7 +736,18 @@ export const EmbeddedDebateDashboard: React.FC<EmbeddedDebateDashboardProps> = (
                             className="flex w-full items-center justify-between rounded-[16px] px-3 py-3 text-left transition-colors"
                             style={{ background: active ? '#F1F1F0' : 'transparent' }}
                           >
-                            <span className="text-[22px] leading-snug">{criterion.label}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[22px] leading-snug">{criterion.label}</span>
+                              <span className="mt-2 block h-2 rounded-full bg-[#ECECE9]">
+                                <span
+                                  className="block h-full rounded-full"
+                                  style={{
+                                    width: `${clamp((selectedCriterionAverages.find((item) => item.label === criterion.label)?.value || 0) * 10, 0, 100)}%`,
+                                    background: selectedTeamColor,
+                                  }}
+                                />
+                              </span>
+                            </span>
                             <ChevronRight
                               className={`h-5 w-5 shrink-0 transition-transform ${
                                 active ? 'rotate-90' : ''
