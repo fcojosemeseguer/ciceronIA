@@ -228,7 +228,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                     focus:outline-none focus:border-[#00E5FF]/50
                     transition-colors
                   "
-                  placeholder="Ej: Torneo UPCT 2024"
+                  placeholder="Nombre del debate"
                 />
               </div>
 
@@ -251,7 +251,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                     focus:outline-none focus:border-[#00E5FF]/50
                     transition-colors
                   "
-                  placeholder="Ej: ¿Debería implementarse la jornada laboral de 4 días?"
+                  placeholder="Tema del debate"
                 />
               </div>
 
@@ -275,7 +275,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                       focus:outline-none focus:border-[#FF6B00]/50
                       transition-colors
                     "
-                    placeholder="Nombre del equipo A"
+                    placeholder="Equipo a favor"
                   />
                 </div>
 
@@ -297,7 +297,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                       focus:outline-none focus:border-[#00E5FF]/50
                       transition-colors
                     "
-                    placeholder="Nombre del equipo B"
+                    placeholder="Equipo en contra"
                   />
                 </div>
               </div>
@@ -350,7 +350,7 @@ export const ProjectsScreen: React.FC<ProjectsScreenProps> = ({
                     resize-none
                   "
                   rows={2}
-                  placeholder="Notas adicionales sobre el debate..."
+                  placeholder="Descripcion opcional"
                 />
               </div>
 

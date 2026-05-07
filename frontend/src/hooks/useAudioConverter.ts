@@ -26,7 +26,7 @@ export const useAudioConverter = (): UseAudioConverterReturn => {
     }
 
     // Validar tamaño (máximo 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 100 * 1024 * 1024; // 100MB
     if (file.size > maxSize) {
       setError(`El archivo es demasiado grande. Máximo: ${formatFileSize(maxSize)}`);
       return null;

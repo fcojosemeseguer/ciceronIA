@@ -20,3 +20,8 @@ export { AnalysisSetupScreen } from './AnalysisSetupScreen';
 export { ProjectsScreen } from './ProjectsScreen';
 export { ProjectDetailsScreen } from './ProjectDetailsScreen';
 export { PublicDashboardScreen } from './PublicDashboardScreen';
+
+// Nuevos componentes para flujo simplificado
+export { DebatesScreen } from './DebatesScreen';
+export { DebateConfigScreen } from './DebateConfigScreen';
+export { DebateDetailsScreen as DebateDetailsScreenNew } from './DebateDetailsScreenNew';

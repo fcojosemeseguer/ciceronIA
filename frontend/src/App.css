@@ -1,5 +1,5 @@
 /* App CSS - Estilos globales generales
-   Los estilos principales están en index.css */
+   Los estilos principales estÃ¡n en index.css */
 
 * {
   box-sizing: border-box;
@@ -14,3 +14,83 @@ body,
   padding: 0;
 }
 
+.app-entry-transition {
+  overflow: hidden;
+  backdrop-filter: none;
+}
+
+.app-entry-transition__veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0) 72%);
+  animation: app-entry-fade-veil 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.app-entry-transition__core {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.08);
+  transform-origin: 50% 50%;
+  animation: app-entry-fade-core 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.app-entry-transition__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18vmax;
+  height: 18vmax;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 0 22px rgba(255, 255, 255, 0.2),
+    inset 0 0 10px rgba(255, 255, 255, 0.14);
+  animation: app-entry-fade-ring 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes app-entry-fade-veil {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes app-entry-fade-core {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  42% {
+    opacity: 0.5;
+    transform: scale(0.985);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.01);
+    filter: blur(0px);
+  }
+}
+
+@keyframes app-entry-fade-ring {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  45% {
+    opacity: 0.7;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}

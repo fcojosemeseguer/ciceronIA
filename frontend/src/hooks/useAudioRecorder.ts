@@ -4,8 +4,9 @@
  * Compatible con APIs de procesamiento de audio
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { AudioRecording } from '../types';
+import { audioBufferToWav, createBrowserAudioContext } from '../utils/audioProcessing';
 
 interface UseAudioRecorderReturn {
   isRecording: boolean;
@@ -14,63 +15,6 @@ interface UseAudioRecorderReturn {
   error: string | null;
   clearError: () => void;
 }
-
-// Función para convertir AudioBuffer a WAV
-const audioBufferToWav = (buffer: AudioBuffer): Blob => {
-  const numberOfChannels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitDepth = 16;
-  
-  const bytesPerSample = bitDepth / 8;
-  const blockAlign = numberOfChannels * bytesPerSample;
-  
-  const dataLength = buffer.length * numberOfChannels * bytesPerSample;
-  const bufferLength = 44 + dataLength;
-  
-  const arrayBuffer = new ArrayBuffer(bufferLength);
-  const view = new DataView(arrayBuffer);
-  
-  // Escribir encabezado WAV
-  const writeString = (view: DataView, offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-  
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataLength, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
-  view.setUint16(22, numberOfChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitDepth, true);
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataLength, true);
-  
-  // Escribir datos de audio
-  const offset = 44;
-  const channels: Float32Array[] = [];
-  for (let i = 0; i < numberOfChannels; i++) {
-    channels.push(buffer.getChannelData(i));
-  }
-  
-  let index = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    for (let channel = 0; channel < numberOfChannels; channel++) {
-      const sample = Math.max(-1, Math.min(1, channels[channel][i]));
-      const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-      view.setInt16(offset + index, intSample, true);
-      index += 2;
-    }
-  }
-  
-  return new Blob([arrayBuffer], { type: 'audio/wav' });
-};
 
 export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -84,6 +28,32 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
+
+  const cleanupMediaResources = useCallback(async () => {
+    if (processorNodeRef.current) {
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
+    }
+
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      try {
+        await audioContextRef.current.close();
+      } catch {
+        // Ignorar errores de cierre
+      }
+      audioContextRef.current = null;
+    }
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
@@ -105,9 +75,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       recordingStartTimeRef.current = Date.now();
 
       // Crear AudioContext
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 44100,
-      });
+      const audioContext = createBrowserAudioContext();
       audioContextRef.current = audioContext;
 
       // Crear source node
@@ -144,24 +112,11 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
 
     // Desconectar y detener
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current = null;
-    }
-
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
-    }
-
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
+    await cleanupMediaResources();
 
     try {
       // Crear AudioBuffer a partir de los chunks
-      const audioContext = audioContextRef.current;
+      const audioContext = createBrowserAudioContext();
       const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
       
       // Validar que hay datos de audio
@@ -180,9 +135,8 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         offset += chunk.length;
       }
 
-      // Cerrar AudioContext
+      // Cerrar AudioContext temporal
       await audioContext.close();
-      audioContextRef.current = null;
 
       setIsRecording(false);
 
@@ -206,19 +160,18 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       console.error('Error al procesar la grabación:', error);
       
       // Asegurar que el AudioContext se cierre incluso si hay error
-      if (audioContextRef.current) {
-        try {
-          await audioContextRef.current.close();
-        } catch (e) {
-          // Ignorar error al cerrar
-        }
-        audioContextRef.current = null;
-      }
+      await cleanupMediaResources();
       
       setIsRecording(false);
       return null;
     }
-  }, [isRecording]);
+  }, [cleanupMediaResources, isRecording]);
+
+  useEffect(() => {
+    return () => {
+      cleanupMediaResources();
+    };
+  }, [cleanupMediaResources]);
 
   return {
     isRecording,

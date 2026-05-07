@@ -1,9 +1,21 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import File, Form, UploadFile
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from fastapi import File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 import re
+
+
+def _raise_form_validation_error(exc: ValidationError) -> None:
+    detail = [
+        {
+            "loc": ["body", *error.get("loc", [])],
+            "msg": error.get("msg", "invalid input"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+    raise HTTPException(status_code=422, detail=detail) from exc
 
 
 class CredsInput(BaseModel):
@@ -79,15 +91,18 @@ class AnalyseData(BaseModel):
         project_code: str = Form(...),
         file: UploadFile = File(...)
     ) -> "AnalyseData":
-        return cls(
-            fase=fase,
-            postura=postura,
-            orador=orador,
-            num_speakers=num_speakers,
-            jwt=jwt,
-            project_code=project_code,
-            file=file
-        )
+        try:
+            return cls(
+                fase=fase,
+                postura=postura,
+                orador=orador,
+                num_speakers=num_speakers,
+                jwt=jwt,
+                project_code=project_code,
+                file=file
+            )
+        except ValidationError as exc:
+            _raise_form_validation_error(exc)
 
 
 class AuthData(BaseModel):
@@ -151,15 +166,18 @@ class QuickAnalyseData(BaseModel):
         debate_type: str = Form(default="upct"),
         file: UploadFile = File(...)
     ) -> "QuickAnalyseData":
-        return cls(
-            fase=fase,
-            postura=postura,
-            orador=orador,
-            num_speakers=num_speakers,
-            jwt=jwt,
-            debate_type=debate_type,
-            file=file
-        )
+        try:
+            return cls(
+                fase=fase,
+                postura=postura,
+                orador=orador,
+                num_speakers=num_speakers,
+                jwt=jwt,
+                debate_type=debate_type,
+                file=file
+            )
+        except ValidationError as exc:
+            _raise_form_validation_error(exc)
 
 
 class ShareLinkCreateData(BaseModel):

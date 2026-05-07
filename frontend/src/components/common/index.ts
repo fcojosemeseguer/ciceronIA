@@ -12,3 +12,6 @@ export { default as Dock, useDock } from './Dock';
 export { AudioDropZone } from './AudioDropZone';
 export { ProjectCard } from './ProjectCard';
 export { GlassNavbar } from './GlassNavbar';
+export { BrandHeader } from './BrandHeader';
+export { BackLink } from './BackLink';
+export { Breadcrumbs } from './Breadcrumbs';

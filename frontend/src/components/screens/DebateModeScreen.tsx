@@ -1,11 +1,11 @@
 /**
- * DebateModeScreen - Selección entre Debate En Vivo o Análisis de Grabado
- * Segundo paso después de hacer clic en "Nuevo Debate"
+ * DebateModeScreen - Seleccion entre Debate En Vivo o Analizar Grabacion
  */
 
 import React from 'react';
-import { GlassNavbar } from '../common';
-import { Mic, Upload, ArrowLeft } from 'lucide-react';
+import { BrandHeader, Breadcrumbs } from '../common';
+import liveIcon from '../../assets/icons/icon-live.svg';
+import analysisIcon from '../../assets/icons/icon-audio-analysis.svg';
 
 interface DebateModeScreenProps {
   onSelectLive: () => void;
@@ -22,105 +22,70 @@ export const DebateModeScreen: React.FC<DebateModeScreenProps> = ({
     {
       id: 'live',
       title: 'Debate en Vivo',
-      description: 'Controla tiempos, rondas y grabación en tiempo real. Ideal para eventos presenciales con juez.',
-      features: [
-        'Timer con cuenta regresiva',
-        'Control de rondas automático',
-        'Grabación integrada',
-        'Evaluación en el momento',
-      ],
-      icon: <Mic className="w-10 h-10" />,
-      color: 'from-cyan-500 to-blue-600',
-      bgGlow: 'cyan',
+      icon: <img src={liveIcon} alt="" className="h-28 w-28 sm:h-36 sm:w-36" style={{ filter: 'brightness(0) invert(1)' }} aria-hidden />,
       onClick: onSelectLive,
     },
     {
       id: 'recorded',
-      title: 'Analizar Debate Grabado',
-      description: 'Sube audios de debates ya realizados y obtén un análisis detallado con IA.',
-      features: [
-        'Subida de audios WAV',
-        'Análisis automático por IA',
-        'Evaluación basada en rúbricas',
-        'Reportes detallados',
-      ],
-      icon: <Upload className="w-10 h-10" />,
-      color: 'from-orange-500 to-red-600',
-      bgGlow: 'orange',
+      title: 'Analizar Grabacion',
+      icon: <img src={analysisIcon} alt="" className="h-28 w-28 sm:h-36 sm:w-36" style={{ filter: 'brightness(0) saturate(100%) invert(38%) sepia(29%) saturate(668%) hue-rotate(346deg) brightness(92%) contrast(88%)' }} aria-hidden />,
       onClick: onSelectRecorded,
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
-      <GlassNavbar title="CiceronAI" />
-      
-      <div className="pt-32 pb-32 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
-          {/* Back Button */}
-          <button
-            onClick={onBack}
-            className="mb-8 flex items-center gap-2 text-white/60 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Volver al Panel</span>
-          </button>
-
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-              Selecciona el Modo
-            </h1>
-            <p className="text-xl text-white/60 max-w-2xl mx-auto">
-              ¿Cómo deseas trabajar con este debate?
-            </p>
+    <div className="app-shell overflow-y-auto">
+      <div className="pt-8 pb-32 px-5 sm:px-8">
+        <div className="mx-auto w-full max-w-[1040px]">
+          <BrandHeader className="mb-8" />
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: 'Panel de Control', onClick: onBack },
+              { label: 'Nuevo Debate' },
+            ]}
+          />
+          <div className="mb-8">
+            <h1 className="text-[46px] sm:text-[62px] leading-none text-[#2C2C2C]">Selecciona el modo</h1>
           </div>
 
-          {/* Mode Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="mx-auto flex max-w-[760px] flex-col gap-6">
             {modes.map((mode) => (
               <button
                 key={mode.id}
                 onClick={mode.onClick}
-                className="group relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-8 text-left transition-all duration-500 hover:bg-white/10 hover:border-white/20 hover:scale-[1.02]"
+                className="group flex min-h-[188px] items-center justify-between rounded-[20px] px-10 py-6 text-left transition-opacity duration-150 hover:opacity-92"
+                style={{
+                  background: mode.id === 'live' ? 'var(--brand-green)' : 'var(--brand-gold)',
+                }}
               >
-                {/* Animated background glow */}
-                <div className={`absolute -top-20 -right-20 w-64 h-64 bg-${mode.bgGlow}-500/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
-                
-                <div className="relative z-10">
-                  {/* Icon */}
-                  <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${mode.color} flex items-center justify-center text-white mb-6 shadow-lg transform group-hover:scale-110 transition-transform duration-300`}>
-                    {mode.icon}
-                  </div>
-                  
-                  {/* Title */}
-                  <h2 className="text-3xl font-bold text-white mb-4">
-                    {mode.title}
+                <div className="flex h-full flex-col justify-between">
+                  <h2
+                    className="text-[44px] sm:text-[66px] font-bold leading-[0.95]"
+                    style={{ color: mode.id === 'live' ? '#F5F5F3' : 'var(--brand-brown)' }}
+                  >
+                    {mode.id === 'live' ? (
+                      <>
+                        Debate
+                        <br />
+                        en vivo
+                      </>
+                    ) : (
+                      <>
+                        Analisis
+                        <br />
+                        de audio
+                      </>
+                    )}
                   </h2>
-                  
-                  {/* Description */}
-                  <p className="text-white/70 text-lg mb-6 leading-relaxed">
-                    {mode.description}
+                  <p
+                    className="text-[64px] leading-none"
+                    style={{ color: mode.id === 'live' ? '#F5F5F3' : 'var(--brand-brown)' }}
+                  >
+                    {mode.id === 'live' ? '→' : '←'}
                   </p>
-                  
-                  {/* Features list */}
-                  <ul className="space-y-3 mb-8">
-                    {mode.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-center gap-3 text-white/60">
-                        <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${mode.color}`} />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  {/* CTA Button */}
-                  <div className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${mode.color} text-white font-semibold transform group-hover:translate-x-2 transition-transform duration-300`}>
-                    <span>Seleccionar</span>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </div>
                 </div>
+                <div className="shrink-0" style={{ color: mode.id === 'live' ? '#F5F5F3' : 'var(--brand-brown)' }}>{mode.icon}</div>
               </button>
             ))}
           </div>

@@ -1,13 +1,18 @@
 /**
  * AuthScreen - Pantalla de Login/Registro
- * Usa nombre de usuario (no email) según el backend
+ * Estetica unificada con el resto de la app.
  */
 
 import React, { useState } from 'react';
+import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { Lock, User, Loader2, Eye, EyeOff, ArrowLeft, AlertCircle } from 'lucide-react';
-import { LiquidGlassButton } from '../common';
-import { validateUsername, validatePassword, getUsernameRequirements, getPasswordRequirements } from '../../utils/authValidation';
+import { BrandHeader, LiquidGlassButton } from '../common';
+import {
+  getPasswordRequirements,
+  getUsernameRequirements,
+  validatePassword,
+  validateUsername,
+} from '../../utils/authValidation';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
@@ -31,208 +36,169 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
     clearError();
     setValidationError('');
 
-    // Validar usuario
     const usernameError = validateUsername(formData.username);
     if (usernameError) {
       setValidationError(usernameError);
       return;
     }
 
-    // Validar contraseña
     const passwordError = validatePassword(formData.password);
     if (passwordError) {
       setValidationError(passwordError);
       return;
     }
 
-    let success;
-    if (isLogin) {
-      success = await login(formData.username, formData.password);
-    } else {
-      success = await register(formData.username, formData.password);
-    }
+    const success = isLogin
+      ? await login(formData.username, formData.password)
+      : await register(formData.username, formData.password);
 
-    if (success) {
-      onAuthenticated();
-    }
+    if (success) onAuthenticated();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) clearError();
     if (validationError) setValidationError('');
   };
 
   const toggleMode = () => {
-    setIsLogin(!isLogin);
+    setIsLogin((prev) => !prev);
     clearError();
     setValidationError('');
     setFormData({ username: '', password: '' });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Botón volver */}
+    <div className="app-shell min-h-screen overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1040px] px-5 py-8 pb-20 sm:px-8">
+        <BrandHeader className="mb-8" />
+
         {onBack && (
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-white/60 hover:text-white transition-colors mb-6"
+            className="mb-6 inline-flex items-center gap-2 rounded-xl border border-[#1C1D1F] bg-[#F5F5F3] px-4 py-2 text-[#2C2C2C] transition-opacity hover:opacity-80"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Volver</span>
+            <ArrowLeft className="h-4 w-4" />
+            <span>Volver</span>
           </button>
         )}
 
-          {/* Formulario */}
-          <div className="
-            backdrop-blur-xl
-            bg-white/5
-            border border-white/10
-            rounded-3xl
-            p-8
-            shadow-[0_8px_32px_rgba(0,0,0,0.3)]
-          ">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Campo de nombre de usuario */}
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
-                  Nombre de usuario
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    placeholder="tu_usuario"
-                    className="
-                      w-full pl-10 pr-4 py-3
-                      bg-white/5
-                      border border-white/10
-                      rounded-xl
-                      text-white placeholder-white/30
-                      focus:outline-none focus:border-[#4A5568]
-                      transition-colors
-                      appearance-none
-                      bg-transparent
-                    "
-                    required
-                    minLength={3}
-                    maxLength={20}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                  />
-                </div>
-                <p className="text-xs text-white/40 mt-1">{getUsernameRequirements()}</p>
+        <div className="mx-auto max-w-[520px] rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-6 sm:p-7">
+          <h1 className="mb-2 text-center text-[38px] leading-none text-[#2C2C2C] sm:text-[46px]">
+            {isLogin ? 'Iniciar sesion' : 'Crear cuenta'}
+          </h1>
+          <p className="mb-6 text-center text-[16px] text-[#5E5E5E]">
+            {redirectTo ? 'Accede para continuar en la app' : 'Accede a tu cuenta de CICERONIA'}
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-[18px] font-medium text-[#2C2C2C]">Nombre de usuario</label>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8A8A8A]" />
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="tu_usuario"
+                  className="w-full rounded-[14px] border border-[#CFCFCD] bg-white py-3 pl-10 pr-4 text-[18px] text-[#2C2C2C] outline-none placeholder:text-[#9A9A9A] focus:border-[#1C1D1F]"
+                  required
+                  minLength={3}
+                  maxLength={20}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
               </div>
-
-              {/* Campo de contraseña */}
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    placeholder="••••••••"
-                    className="
-                      w-full pl-10 pr-12 py-3
-                      bg-white/5
-                      border border-white/10
-                      rounded-xl
-                      text-white placeholder-white/30
-                      focus:outline-none focus:border-[#4A5568]
-                      transition-colors
-                      appearance-none
-                      bg-transparent
-                    "
-                    required
-                    minLength={8}
-                    maxLength={32}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                <p className="text-xs text-white/40 mt-1">{getPasswordRequirements()}</p>
-              </div>
-
-              {/* Error de validación */}
-              {validationError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <p className="text-sm text-red-400">{validationError}</p>
-                </div>
-              )}
-
-              {/* Error del servidor */}
-              {error && (
-                <div className="p-3 bg-[#1F2A33]/50 border border-[#1F2A33] rounded-lg">
-                  <p className="text-sm text-white/80 text-center">{error}</p>
-                </div>
-              )}
-
-              {/* Botón de submit */}
-              <LiquidGlassButton
-                type="submit"
-                variant="primary"
-                size="lg"
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Procesando...</span>
-                  </>
-                ) : (
-                  <span>{isLogin ? 'Iniciar sesión' : 'Crear cuenta'}</span>
-                )}
-              </LiquidGlassButton>
-            </form>
-
-            {/* Divider */}
-            <div className="my-6 flex items-center gap-4">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-sm text-white/40">o</span>
-              <div className="flex-1 h-px bg-white/10" />
+              <p className="mt-1 text-xs text-[#7A7A7A]">{getUsernameRequirements()}</p>
             </div>
 
-            {/* Toggle mode */}
-            <p className="text-center text-white/60">
-              {isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
+            <div>
+              <label className="mb-1 block text-[18px] font-medium text-[#2C2C2C]">Contrasena</label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8A8A8A]" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="••••••••"
+                  className="w-full rounded-[14px] border border-[#CFCFCD] bg-white py-3 pl-10 pr-12 text-[18px] text-[#2C2C2C] outline-none placeholder:text-[#9A9A9A] focus:border-[#1C1D1F]"
+                  required
+                  minLength={8}
+                  maxLength={32}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
                 <button
-                type="button"
-                onClick={toggleMode}
-                className="text-white/70 hover:text-white font-medium transition-colors underline underline-offset-2"
-              >
-                {isLogin ? 'Regístrate' : 'Inicia sesión'}
-              </button>
-            </p>
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A8A8A] transition-colors hover:text-[#2C2C2C]"
+                  aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-[#7A7A7A]">{getPasswordRequirements()}</p>
+            </div>
+
+            {validationError && (
+              <div className="flex items-center gap-2 rounded-xl border border-[#C44536]/40 bg-[#C44536]/10 px-3 py-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 text-[#C44536]" />
+                <p className="text-sm text-[#A63A2D]">{validationError}</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="rounded-xl border border-[#C44536]/40 bg-[#C44536]/10 px-3 py-2">
+                <p className="text-sm text-[#A63A2D]">{error}</p>
+              </div>
+            )}
+
+            <LiquidGlassButton
+              type="submit"
+              variant="primary"
+              className="mt-2 w-full rounded-[14px] border-0 bg-[#3A7D44] py-3 text-[20px] font-semibold text-[#F5F5F3]"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Procesando...
+                </span>
+              ) : isLogin ? (
+                'Iniciar sesion'
+              ) : (
+                'Crear cuenta'
+              )}
+            </LiquidGlassButton>
+          </form>
+
+          <div className="my-5 flex items-center gap-4">
+            <div className="h-px flex-1 bg-[#CFCFCD]" />
+            <span className="text-sm text-[#7A7A7A]">o</span>
+            <div className="h-px flex-1 bg-[#CFCFCD]" />
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-white/40 text-sm mt-8">
-            © 2026 CiceronAI. Todos los derechos reservados.
+          <p className="text-center text-[#5E5E5E]">
+            {isLogin ? 'No tienes cuenta?' : 'Ya tienes cuenta?'}{' '}
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="font-semibold text-[#2C2C2C] underline underline-offset-2 transition-opacity hover:opacity-80"
+            >
+              {isLogin ? 'Registrate' : 'Inicia sesion'}
+            </button>
           </p>
         </div>
       </div>
+    </div>
   );
 };
+
+export default AuthScreen;

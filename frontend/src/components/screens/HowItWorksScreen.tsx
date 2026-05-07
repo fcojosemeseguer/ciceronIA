@@ -50,12 +50,12 @@ export const HowItWorksScreen: React.FC<HowItWorksScreenProps> = ({ onBack, onHo
       ]
     },
     {
-      label: "Equipo",
+      label: "Configuracion",
       bgColor: "#271E37", 
       textColor: "#fff",
       links: [
-        { label: "Nosotros", href: "#", ariaLabel: "Conocer al equipo" },
-        { label: "Contacto", href: "#", ariaLabel: "Contactar" }
+        { label: "Campos", href: "#", ariaLabel: "Ver campos" },
+        { label: "Evaluacion", href: "#", ariaLabel: "Ver evaluacion" }
       ]
     }
   ];
@@ -63,7 +63,7 @@ export const HowItWorksScreen: React.FC<HowItWorksScreenProps> = ({ onBack, onHo
     {
       icon: Users,
       title: '1. Configura tu Debate',
-      description: 'Define el tema, los nombres de los equipos y la duración de cada ronda. Puedes personalizar completamente la estructura del debate según tus necesidades.'
+      description: 'Define el tema, las posturas y la duracion de cada ronda. Puedes personalizar la estructura del debate segun tus necesidades.'
     },
     {
       icon: Mic,

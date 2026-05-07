@@ -4,7 +4,7 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'https://ciceronapi.n0.nu/api/v1';
 
 // Crear instancia de axios
 const apiClient = axios.create({

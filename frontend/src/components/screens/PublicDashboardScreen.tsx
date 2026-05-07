@@ -89,6 +89,56 @@ const METRIC_META: Record<string, MetricMeta> = {
 
 const metricOrder = Object.keys(METRIC_META);
 
+const sortScoreBuckets = (buckets: Record<string, { avg_score_percent: number; count: number }>) =>
+  Object.entries(buckets)
+    .map(([label, value]) => ({ label, ...value }))
+    .sort((a, b) => b.avg_score_percent - a.avg_score_percent);
+
+const getCriterionDashboard = (segments: ProjectSegment[]) => {
+  const totals = new Map<string, { total: number; count: number }>();
+
+  segments.forEach((segment) => {
+    segment.analysis?.criterios?.forEach((criterion) => {
+      const current = totals.get(criterion.criterio) || { total: 0, count: 0 };
+      totals.set(criterion.criterio, {
+        total: current.total + criterion.nota,
+        count: current.count + 1,
+      });
+    });
+  });
+
+  return Array.from(totals.entries())
+    .map(([label, value]) => ({
+      label,
+      avg: value.total / Math.max(1, value.count),
+      count: value.count,
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 8);
+};
+
+const getVisualMetricDashboard = (segments: ProjectSegment[]) => {
+  const metricGroups = segments.flatMap((segment) => Object.values(renderMetricsBySpeaker(segment)));
+
+  const averageMetric = (keys: string[]) => {
+    const values = metricGroups.flatMap((metrics) =>
+      keys
+        .map((key) => metrics?.[key])
+        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    );
+
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+
+  return [
+    { label: 'Expresividad', value: averageMetric(['F0semitoneFrom27.5Hz_sma3nz_stddevNorm']), max: 0.3 },
+    { label: 'Proyección', value: averageMetric(['loudness_sma3_amean']), max: 2 },
+    { label: 'Énfasis', value: averageMetric(['loudness_sma3_stddevNorm', 'loudnessPeaksPerSec']), max: 3 },
+    { label: 'Ritmo', value: averageMetric(['VoicedSegmentsPerSec']), max: 2.5 },
+  ];
+};
+
 const formatMetricValue = (value: unknown): string => {
   if (typeof value === 'number') {
     return value.toFixed(4);
@@ -217,6 +267,27 @@ export const PublicDashboardScreen: React.FC<PublicDashboardScreenProps> = ({ to
     return Object.keys(data.summary.score_by_orador);
   }, [data]);
 
+  const scoreByPhase = useMemo(
+    () => (data ? sortScoreBuckets(data.summary.score_by_fase) : []),
+    [data]
+  );
+  const scoreByPosture = useMemo(
+    () => (data ? sortScoreBuckets(data.summary.score_by_postura) : []),
+    [data]
+  );
+  const scoreBySpeaker = useMemo(
+    () => (data ? sortScoreBuckets(data.summary.score_by_orador).slice(0, 6) : []),
+    [data]
+  );
+  const criterionDashboard = useMemo(
+    () => (data ? getCriterionDashboard(data.segments.items) : []),
+    [data]
+  );
+  const visualMetricDashboard = useMemo(
+    () => (data ? getVisualMetricDashboard(data.segments.items) : []),
+    [data]
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto pb-20">
       <div className="p-4 sm:p-6 lg:p-8">
@@ -281,6 +352,153 @@ export const PublicDashboardScreen: React.FC<PublicDashboardScreenProps> = ({ to
                   <p className="text-white text-2xl font-bold">{Object.keys(data.summary.score_by_orador).length}</p>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4 mb-6">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5 overflow-hidden">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                    <div>
+                      <p className="text-white/50 text-sm uppercase tracking-[0.14em]">Mapa competitivo</p>
+                      <h2 className="text-white text-2xl font-bold">Puntuación por fases</h2>
+                    </div>
+                    <div className="rounded-full bg-cyan-400/10 border border-cyan-300/20 px-3 py-1 text-cyan-200 text-sm">
+                      {formatPercent(data.summary.average_score_percent)} global
+                    </div>
+                  </div>
+
+                  {scoreByPhase.length > 0 ? (
+                    <div className="space-y-3">
+                      {scoreByPhase.map((item) => (
+                        <div key={`phase-chart-${item.label}`} className="grid grid-cols-[minmax(96px,160px)_1fr_58px] items-center gap-3">
+                          <p className="text-white/75 text-sm truncate">{item.label}</p>
+                          <div className="h-4 rounded-full bg-black/30 border border-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-yellow-200"
+                              style={{ width: `${Math.min(100, Math.max(0, item.avg_score_percent))}%` }}
+                            />
+                          </div>
+                          <p className="text-right text-cyan-100 font-bold">{formatPercent(item.avg_score_percent)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-white/55">Aún no hay fases puntuadas.</p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <p className="text-white/50 text-sm uppercase tracking-[0.14em] mb-1">Posturas</p>
+                  <h2 className="text-white text-2xl font-bold mb-5">Comparativa visual</h2>
+                  <div className="space-y-4">
+                    {scoreByPosture.map((item) => (
+                      <div key={`posture-chart-${item.label}`} className="rounded-xl bg-black/25 border border-white/10 p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-white font-semibold">{item.label}</p>
+                          <p className="text-[#00E5FF] text-xl font-bold">{formatPercent(item.avg_score_percent)}</p>
+                        </div>
+                        <div className="h-3 rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#00E5FF]"
+                            style={{ width: `${Math.min(100, Math.max(0, item.avg_score_percent))}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-white/45 text-xs">{item.count} intervenciones</p>
+                      </div>
+                    ))}
+                    {scoreByPosture.length === 0 && (
+                      <p className="text-white/55">Sin comparativa disponible.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5 lg:col-span-2">
+                  <p className="text-white/50 text-sm uppercase tracking-[0.14em] mb-1">Rúbrica</p>
+                  <h2 className="text-white text-2xl font-bold mb-5">Fortalezas por criterio</h2>
+                  {criterionDashboard.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {criterionDashboard.map((criterion, index) => (
+                        <div key={`criterion-visual-${criterion.label}`} className="rounded-xl bg-black/25 border border-white/10 p-3">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <p className="text-white/85 text-sm font-semibold truncate">{criterion.label}</p>
+                            <p className="text-yellow-200 font-bold">{criterion.avg.toFixed(1)}</p>
+                          </div>
+                          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, criterion.avg * 10))}%`,
+                                background: index < 3 ? '#F8D66D' : '#00E5FF',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-white/55">No hay criterios en los segmentos cargados.</p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <p className="text-white/50 text-sm uppercase tracking-[0.14em] mb-1">Prosodia</p>
+                  <h2 className="text-white text-2xl font-bold mb-5">Perfil vocal</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    {visualMetricDashboard.map((metric) => {
+                      const percent =
+                        typeof metric.value === 'number'
+                          ? Math.min(100, Math.max(0, (metric.value / metric.max) * 100))
+                          : 0;
+
+                      return (
+                        <div key={`metric-visual-${metric.label}`} className="rounded-xl bg-black/25 border border-white/10 p-3">
+                          <svg viewBox="0 0 72 72" className="mx-auto h-20 w-20">
+                            <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="9" />
+                            <circle
+                              cx="36"
+                              cy="36"
+                              r="28"
+                              fill="none"
+                              stroke="#00E5FF"
+                              strokeWidth="9"
+                              strokeLinecap="round"
+                              strokeDasharray={`${percent * 1.76} 176`}
+                              transform="rotate(-90 36 36)"
+                            />
+                          </svg>
+                          <p className="text-white text-center text-sm font-semibold">{metric.label}</p>
+                          <p className="text-white/50 text-center text-xs">
+                            {typeof metric.value === 'number' ? metric.value.toFixed(2) : 'N/A'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {scoreBySpeaker.length > 0 && (
+                <div className="mb-6 rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <p className="text-white/50 text-sm uppercase tracking-[0.14em] mb-1">Oradores</p>
+                  <h2 className="text-white text-2xl font-bold mb-5">Ranking visual</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {scoreBySpeaker.map((speaker, index) => (
+                      <div key={`speaker-ranking-${speaker.label}`} className="rounded-xl bg-black/25 border border-white/10 p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-white/85 text-sm font-semibold truncate">{index + 1}. {speaker.label}</p>
+                          <p className="text-[#00E5FF] font-bold">{formatPercent(speaker.avg_score_percent)}</p>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#F8D66D]"
+                            style={{ width: `${Math.min(100, Math.max(0, speaker.avg_score_percent))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mb-6 p-4 rounded-2xl bg-white/5 border border-white/10">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3">

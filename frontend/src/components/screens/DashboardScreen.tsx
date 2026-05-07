@@ -1,23 +1,26 @@
 /**
  * DashboardScreen - Pantalla principal unificada
- * 3 opciones claras: Nuevo Debate, Analizar Grabado, Historial
  */
 
 import React from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { GlassNavbar } from '../common';
-import { Plus, FileAudio, FolderOpen, Mic, Upload } from 'lucide-react';
+import { BrandHeader } from '../common';
+import { ReactComponent as PlusIcon } from '../../assets/icons/icon-plus.svg';
+import { ReactComponent as HistoryIcon } from '../../assets/icons/icon-history.svg';
 
 interface DashboardScreenProps {
   onNewDebate: () => void;
   onAnalyzeRecorded: () => void;
   onViewHistory: () => void;
+  onNewLiveDebate?: () => void;
+  onNewAnalysis?: () => void;
+  onViewDebates?: () => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onNewDebate,
-  onAnalyzeRecorded,
   onViewHistory,
+  onViewDebates,
 }) => {
   const { user } = useAuthStore();
 
@@ -25,81 +28,56 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     {
       id: 'new-debate',
       title: 'Nuevo Debate',
-      description: 'Inicia un debate en vivo o analiza uno grabado',
-      icon: <Plus className="w-8 h-8" />,
-      color: 'from-cyan-500 to-blue-600',
+      icon: (
+        <PlusIcon
+          aria-hidden
+          className="h-[96px] w-[96px] sm:h-[130px] sm:w-[130px]"
+          style={{ color: 'var(--brand-gold)' }}
+        />
+      ),
       onClick: onNewDebate,
     },
     {
-      id: 'analyze',
-      title: 'Analizar Debate Grabado',
-      description: 'Sube audios y obtén análisis detallado con IA',
-      icon: <FileAudio className="w-8 h-8" />,
-      color: 'from-orange-500 to-red-600',
-      onClick: onAnalyzeRecorded,
-    },
-    {
-      id: 'projects',
-      title: 'Mis Proyectos',
-      description: 'Gestiona tus debates y análisis',
-      icon: <FolderOpen className="w-8 h-8" />,
-      color: 'from-purple-500 to-pink-600',
-      onClick: onAnalyzeRecorded,
+      id: 'debates',
+      title: 'Debates Anteriores',
+      icon: <HistoryIcon aria-hidden className="h-[96px] w-[96px] sm:h-[130px] sm:w-[130px]" style={{ color: '#FFFFFF' }} />,
+      onClick: onViewDebates || onViewHistory,
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
-      <GlassNavbar title="CiceronAI" />
-      
-      <div className="pt-32 pb-32 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+    <div className="app-shell overflow-y-auto">
+      <div className="pt-8 pb-32 px-5 sm:px-8">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <BrandHeader className="mb-9" />
+
+          <div className="mb-4 inline-flex rounded-2xl bg-[#E8E8E8] px-4 py-1.5">
+            <h1 className="text-[38px] font-extrabold uppercase leading-none tracking-tight text-[#2C2C2C]">
               Panel de Control
             </h1>
-            <p className="text-xl text-white/60">
-              {user?.name ? `Bienvenido, ${user.name}` : 'Gestiona tus debates'}
-            </p>
           </div>
+          <p className="mb-10 text-[34px] sm:text-[52px] leading-none text-[#2C2C2C]">
+            {user?.name ? `Bienvenido @${user.name}` : 'Bienvenido @usuario'}
+          </p>
 
-          {/* Menu Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={item.onClick}
-                className="group relative overflow-hidden rounded-3xl bg-white/5 border border-white/10 p-8 transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:scale-105"
-              >
-                {/* Background gradient on hover */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-                
-                <div className="relative z-10 flex flex-col items-center text-center">
-                  <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white mb-6 shadow-lg`}>
+          <div className="mx-auto grid max-w-[1080px] grid-cols-1 justify-items-center gap-12 md:grid-cols-2 md:gap-20">
+            {menuItems.map((item) => {
+              const isPrimary = item.id === 'new-debate';
+              return (
+                <button key={item.id} onClick={item.onClick} className="group flex flex-col items-center text-center">
+                  <div
+                    className="flex h-[300px] w-[460px] max-w-[92vw] items-center justify-center rounded-[20px] border border-transparent transition-opacity duration-150 group-hover:opacity-90"
+                    style={{ background: isPrimary ? 'var(--brand-green)' : 'var(--brand-dark)' }}
+                  >
                     {item.icon}
                   </div>
-                  
-                  <h3 className="text-2xl font-bold text-white mb-3">
+                  <p className="mt-5 w-[460px] max-w-[92vw] whitespace-nowrap text-center text-[34px] sm:text-[44px] leading-none text-[#2C2C2C]">
                     {item.title}
-                  </h3>
-                  
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {item.description}
                   </p>
-
-                  {/* Arrow indicator */}
-                  <div className="mt-6 flex items-center gap-2 text-white/40 group-hover:text-white/80 transition-colors">
-                    <span className="text-sm font-medium">Comenzar</span>
-                    <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
-
         </div>
       </div>
     </div>

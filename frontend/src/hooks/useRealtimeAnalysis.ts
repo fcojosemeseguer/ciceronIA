@@ -1,9 +1,9 @@
 /**
- * Hook para análisis en tiempo real de grabaciones de debate
- * Gestiona una cola de análisis que se procesa en paralelo con el debate
+ * Hook para analisis en tiempo real de grabaciones de debate.
+ * Expone una cola reactiva para que la UI refleje bien el estado del backend.
  */
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { analysisService } from '../api/analysis';
 import { AudioRecording, AnalysisResult, TeamPosition, RoundType, Project } from '../types';
 
@@ -27,7 +27,6 @@ export interface UseRealtimeAnalysisReturn {
   errorCount: number;
 }
 
-// Mapear RoundType a fase del backend
 const mapRoundTypeToFase = (roundType: RoundType): string => {
   const mapping: Record<RoundType, string> = {
     'Introducción': 'introduccion',
@@ -38,10 +37,10 @@ const mapRoundTypeToFase = (roundType: RoundType): string => {
     'Definición': 'definicion',
     'Valoración': 'valoracion',
   };
+
   return mapping[roundType] || roundType.toLowerCase();
 };
 
-// Mapear TeamPosition a postura
 const mapTeamToPostura = (team: TeamPosition): string => {
   return team === 'A' ? 'A Favor' : 'En Contra';
 };
@@ -52,86 +51,95 @@ export const useRealtimeAnalysis = (
   onResultReceived?: (result: AnalysisResult, recording: AudioRecording) => void
 ): UseRealtimeAnalysisReturn => {
   const queueRef = useRef<QueuedAnalysis[]>([]);
-  const processingRef = useRef<boolean>(false);
-  const isMountedRef = useRef<boolean>(true);
+  const processingRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const [queueState, setQueueState] = useState<QueuedAnalysis[]>([]);
+  const [isProcessingState, setIsProcessingState] = useState(false);
 
-  // Procesar la siguiente grabación en la cola
+  const syncQueue = useCallback((nextQueue: QueuedAnalysis[]) => {
+    queueRef.current = nextQueue;
+    if (isMountedRef.current) {
+      setQueueState([...nextQueue]);
+    }
+  }, []);
+
   const processNextInQueue = useCallback(async () => {
-    if (processingRef.current || !isMountedRef.current) return;
-    
-    const pending = queueRef.current.find(q => q.status === 'pending');
-    if (!pending) return;
+    if (processingRef.current || !isMountedRef.current) {
+      return;
+    }
+
+    const pending = queueRef.current.find((item) => item.status === 'pending');
+    if (!pending) {
+      return;
+    }
 
     processingRef.current = true;
+    setIsProcessingState(true);
     pending.status = 'analyzing';
     pending.startedAt = new Date();
+    syncQueue([...queueRef.current]);
 
     try {
       if (!pending.recording.blob) {
         throw new Error('No audio blob available');
       }
 
-      // Convertir Blob a File
       const file = new File(
         [pending.recording.blob],
         `debate_${pending.recording.team}_${pending.recording.roundType}.wav`,
         { type: 'audio/wav' }
       );
 
-      // Enviar al backend
-      let result: AnalysisResult;
+      const result = project
+        ? await analysisService.analyse({
+            fase: mapRoundTypeToFase(pending.recording.roundType),
+            postura: mapTeamToPostura(pending.recording.team),
+            orador: `Orador ${pending.recording.order}`,
+            num_speakers: 1,
+            project_code: project.code,
+            file,
+          })
+        : await analysisService.quickAnalyse({
+            fase: mapRoundTypeToFase(pending.recording.roundType),
+            postura: mapTeamToPostura(pending.recording.team),
+            orador: `Orador ${pending.recording.order}`,
+            num_speakers: 1,
+            debate_type: debateType,
+            file,
+          });
 
-      if (project) {
-        // Análisis con proyecto
-        result = await analysisService.analyse({
-          fase: mapRoundTypeToFase(pending.recording.roundType),
-          postura: mapTeamToPostura(pending.recording.team),
-          orador: `Orador ${pending.recording.order}`,
-          num_speakers: 1,
-          project_code: project.code,
-          file: file,
-        });
-      } else {
-        // Análisis rápido sin proyecto (para compatibilidad temporal)
-        result = await analysisService.quickAnalyse({
-          fase: mapRoundTypeToFase(pending.recording.roundType),
-          postura: mapTeamToPostura(pending.recording.team),
-          orador: `Orador ${pending.recording.order}`,
-          num_speakers: 1,
-          debate_type: debateType,
-          file: file,
-        });
+      if (!isMountedRef.current) {
+        return;
       }
-
-      if (!isMountedRef.current) return;
 
       pending.status = 'completed';
       pending.result = result;
       pending.completedAt = new Date();
+      syncQueue([...queueRef.current]);
 
-      // Notificar resultado
-      if (onResultReceived) {
-        onResultReceived(result, pending.recording);
+      onResultReceived?.(result, pending.recording);
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return;
       }
 
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      
       pending.status = 'error';
       pending.error = error instanceof Error ? error.message : 'Error desconocido';
+      syncQueue([...queueRef.current]);
       console.error('Error analyzing recording:', error);
     } finally {
       processingRef.current = false;
-      
-      // Procesar siguiente en cola
+      setIsProcessingState(false);
+
       if (isMountedRef.current) {
-        setTimeout(() => processNextInQueue(), 100);
+        setTimeout(() => {
+          void processNextInQueue();
+        }, 100);
       }
     }
-  }, [project, debateType, onResultReceived]);
+  }, [project, debateType, onResultReceived, syncQueue]);
 
-  // Añadir grabación a la cola
-  const queueAnalysis = useCallback(async (recording: AudioRecording): Promise<AnalysisResult> => {
+  const queueAnalysis = useCallback((recording: AudioRecording): Promise<AnalysisResult> => {
     return new Promise((resolve, reject) => {
       const queuedItem: QueuedAnalysis = {
         id: recording.id,
@@ -139,45 +147,36 @@ export const useRealtimeAnalysis = (
         status: 'pending',
       };
 
-      queueRef.current.push(queuedItem);
+      syncQueue([...queueRef.current, queuedItem]);
+      void processNextInQueue();
 
-      // Iniciar procesamiento si no está procesando
-      processNextInQueue();
-
-      // Esperar a que se complete el análisis
       const checkInterval = setInterval(() => {
-        const item = queueRef.current.find(q => q.id === recording.id);
+        const item = queueRef.current.find((entry) => entry.id === recording.id);
+
         if (item?.status === 'completed' && item.result) {
           clearInterval(checkInterval);
           resolve(item.result);
         } else if (item?.status === 'error') {
           clearInterval(checkInterval);
-          reject(new Error(item.error || 'Error en el análisis'));
+          reject(new Error(item.error || 'Error en el analisis'));
         }
-      }, 100);
+      }, 120);
     });
-  }, [processNextInQueue]);
+  }, [processNextInQueue, syncQueue]);
 
-  // Obtener estado de la cola
   const getQueueStatus = useCallback(() => {
-    return [...queueRef.current];
-  }, []);
+    return [...queueState];
+  }, [queueState]);
 
-  // Obtener resultados completados
   const getCompletedResults = useCallback(() => {
-    return queueRef.current
-      .filter(q => q.status === 'completed' && q.result)
-      .map(q => q.result!);
-  }, []);
+    return queueState
+      .filter((item) => item.status === 'completed' && item.result)
+      .map((item) => item.result as AnalysisResult);
+  }, [queueState]);
 
-  // Contadores
-  const pendingCount = queueRef.current.filter(q => q.status === 'pending').length;
-  const completedCount = queueRef.current.filter(q => q.status === 'completed').length;
-  const errorCount = queueRef.current.filter(q => q.status === 'error').length;
-
-  // Cleanup
   useEffect(() => {
     isMountedRef.current = true;
+
     return () => {
       isMountedRef.current = false;
     };
@@ -187,10 +186,10 @@ export const useRealtimeAnalysis = (
     queueAnalysis,
     getQueueStatus,
     getCompletedResults,
-    isProcessing: processingRef.current,
-    pendingCount,
-    completedCount,
-    errorCount,
+    isProcessing: isProcessingState,
+    pendingCount: queueState.filter((item) => item.status === 'pending').length,
+    completedCount: queueState.filter((item) => item.status === 'completed').length,
+    errorCount: queueState.filter((item) => item.status === 'error').length,
   };
 };
 
