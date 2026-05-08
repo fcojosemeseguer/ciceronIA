@@ -46,9 +46,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   ];
 
   return (
-    <div className="app-shell overflow-y-auto">
-      <div className="pt-8 pb-32 px-5 sm:px-8">
-        <div className="mx-auto w-full max-w-[1200px]">
+    <div className="app-shell overflow-y-hidden">
+      <div className="h-[calc(100dvh-108px)] px-5 pt-6 pb-6 sm:px-8">
+        <div className="mx-auto flex h-full w-full max-w-[1200px] flex-col">
           <BrandHeader className="mb-9" />
 
           <div className="mb-4 inline-flex rounded-2xl bg-[#E8E8E8] px-4 py-1.5">
@@ -56,27 +56,29 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               Panel de Control
             </h1>
           </div>
-          <p className="mb-10 text-[34px] sm:text-[52px] leading-none text-[#2C2C2C]">
+          <p className="mb-10 text-[34px] leading-none text-[#2C2C2C] sm:text-[52px]">
             {user?.name ? `Bienvenido @${user.name}` : 'Bienvenido @usuario'}
           </p>
 
-          <div className="mx-auto grid max-w-[1080px] grid-cols-1 justify-items-center gap-12 md:grid-cols-2 md:gap-20">
-            {menuItems.map((item) => {
-              const isPrimary = item.id === 'new-debate';
-              return (
-                <button key={item.id} onClick={item.onClick} className="group flex flex-col items-center text-center">
-                  <div
-                    className="flex h-[300px] w-[460px] max-w-[92vw] items-center justify-center rounded-[20px] border border-transparent transition-opacity duration-150 group-hover:opacity-90"
-                    style={{ background: isPrimary ? 'var(--brand-green)' : 'var(--brand-dark)' }}
-                  >
-                    {item.icon}
-                  </div>
-                  <p className="mt-5 w-[460px] max-w-[92vw] whitespace-nowrap text-center text-[34px] sm:text-[44px] leading-none text-[#2C2C2C]">
-                    {item.title}
-                  </p>
-                </button>
-              );
-            })}
+          <div className="flex flex-1 w-full items-center justify-center">
+              <div className="grid w-fit grid-cols-1 justify-items-center gap-12 md:grid-cols-2 md:gap-20">
+                {menuItems.map((item) => {
+                  const isPrimary = item.id === 'new-debate';
+                  return (
+                    <button key={item.id} onClick={item.onClick} className="group flex flex-col items-center text-center">
+                      <div
+                        className="flex h-[300px] w-[460px] max-w-[92vw] items-center justify-center rounded-[20px] border border-transparent transition-opacity duration-150 group-hover:opacity-90"
+                        style={{ background: isPrimary ? 'var(--brand-green)' : 'var(--brand-dark)' }}
+                      >
+                        {item.icon}
+                      </div>
+                      <p className="mt-5 w-[460px] max-w-[92vw] whitespace-nowrap text-center text-[34px] leading-none text-[#2C2C2C] sm:text-[44px]">
+                        {item.title}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
           </div>
         </div>
       </div>
