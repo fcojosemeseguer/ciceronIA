@@ -387,7 +387,7 @@ function App() {
 
   const handleLoginFromLanding = () => {
     runAppEntryTransition(() => {
-      handleGoToAuth('dashboard');
+      handleGoToAuth('landing');
     });
   };
 
@@ -726,7 +726,7 @@ function App() {
         );
 
       case 'settings':
-        return <SettingsScreen onBack={handleGoToDashboard} />;
+        return <SettingsScreen onLogout={handleGoToLanding} />;
 
       case 'public-dashboard':
         return publicDashboardToken ? (
