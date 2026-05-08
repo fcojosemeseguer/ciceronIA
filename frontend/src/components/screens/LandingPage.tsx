@@ -9,7 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 
 interface LandingPageProps {
   onStartDebate: () => void;
-  onLogin: (redirectTo?: 'home') => void;
+  onLogin: (redirectTo?: 'landing' | 'dashboard') => void;
   onOpenSettings?: () => void;
 }
 
@@ -17,7 +17,7 @@ type LandingView = 'home' | 'demos' | 'about';
 
 const navItems: Array<{ id: LandingView; label: string }> = [
   { id: 'home', label: 'HOME' },
-  { id: 'demos', label: 'DEMOS' },
+  { id: 'demos', label: 'DEMO' },
   { id: 'about', label: 'ABOUT' },
 ];
 
@@ -41,7 +41,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
       onStartDebate();
       return;
     }
-    onLogin('home');
+    onLogin('dashboard');
   };
 
   return (
@@ -74,7 +74,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
                   key={item.id}
                   type="button"
                   onClick={() => setView(item.id)}
-                    className={`text-[24px] font-medium leading-none transition-opacity ${
+                    className={`inline-flex h-8 items-center text-[24px] font-medium leading-none transition-opacity ${
                     view === item.id ? 'opacity-100' : 'opacity-70 hover:opacity-100'
                   }`}
                 >
@@ -96,7 +96,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               {!isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => onLogin('home')}
+                  onClick={() => onLogin('landing')}
                   className="rounded-[18px] border-2 border-[#111] bg-[#F5F5F3] px-7 py-3 text-[24px] font-medium leading-none"
                 >
                   Login
@@ -146,7 +146,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               {!isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => onLogin('home')}
+                  onClick={() => onLogin('landing')}
                   className="rounded-xl border border-[#1C1D1F] bg-white px-4 py-3 text-left text-lg font-medium"
                 >
                   Login
@@ -163,7 +163,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
           </div>
         )}
 
-        <main className="flex flex-1 items-center justify-center py-8">
+        <main className={`flex flex-1 justify-center py-8 ${view === 'home' ? 'items-center' : 'items-start'}`}>
           {view === 'home' && (
             <section className="-mt-12 text-center sm:-mt-16">
               <div className="mb-10 flex items-center justify-center gap-2 sm:gap-4">
