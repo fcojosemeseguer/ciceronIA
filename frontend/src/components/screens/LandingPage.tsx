@@ -9,7 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 
 interface LandingPageProps {
   onStartDebate: () => void;
-  onLogin: (redirectTo?: 'home') => void;
+  onLogin: (redirectTo?: 'landing' | 'dashboard') => void;
   onOpenSettings?: () => void;
 }
 
@@ -41,7 +41,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
       onStartDebate();
       return;
     }
-    onLogin('home');
+    onLogin('dashboard');
   };
 
   return (
@@ -96,7 +96,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               {!isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => onLogin('home')}
+                  onClick={() => onLogin('landing')}
                   className="rounded-[18px] border-2 border-[#111] bg-[#F5F5F3] px-7 py-3 text-[24px] font-medium leading-none"
                 >
                   Login
@@ -146,7 +146,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartDebate, onLogin
               {!isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => onLogin('home')}
+                  onClick={() => onLogin('landing')}
                   className="rounded-xl border border-[#1C1D1F] bg-white px-4 py-3 text-left text-lg font-medium"
                 >
                   Login

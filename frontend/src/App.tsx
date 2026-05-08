@@ -385,9 +385,9 @@ function App() {
     });
   };
 
-  const handleLoginFromLanding = () => {
+  const handleLoginFromLanding = (redirectTo: AppScreen = 'landing') => {
     runAppEntryTransition(() => {
-      handleGoToAuth('landing');
+      handleGoToAuth(redirectTo);
     });
   };
 
