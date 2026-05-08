@@ -49,12 +49,13 @@ export const DebateModeScreen: React.FC<DebateModeScreenProps> = ({
             <h1 className="text-[46px] sm:text-[62px] leading-none text-[#2C2C2C]">Selecciona el modo</h1>
           </div>
 
-          <div className="mx-auto flex max-w-[760px] flex-col gap-6">
-            {modes.map((mode) => (
-              <button
-                key={mode.id}
-                onClick={mode.onClick}
-                className="group flex min-h-[188px] items-center justify-between rounded-[20px] px-10 py-6 text-left transition-opacity duration-150 hover:opacity-92"
+          <div className="relative left-1/2 w-[min(92vw,760px)] -translate-x-1/2">
+              <div className="flex flex-col gap-6">
+                {modes.map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={mode.onClick}
+                    className="group flex min-h-[188px] w-full items-center justify-between rounded-[20px] px-10 py-6 text-left transition-opacity duration-150 hover:opacity-92"
                 style={{
                   background: mode.id === 'live' ? 'var(--brand-green)' : 'var(--brand-gold)',
                 }}
@@ -86,8 +87,9 @@ export const DebateModeScreen: React.FC<DebateModeScreenProps> = ({
                   </p>
                 </div>
                 <div className="shrink-0" style={{ color: mode.id === 'live' ? '#F5F5F3' : 'var(--brand-brown)' }}>{mode.icon}</div>
-              </button>
-            ))}
+                </button>
+              ))}
+              </div>
           </div>
         </div>
       </div>

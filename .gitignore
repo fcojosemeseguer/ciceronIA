@@ -4,3 +4,4 @@ backend/app/.DS_Store
 backend/db.json
 backend/web-test/
 backend/data/test/.DS_Store
+.env

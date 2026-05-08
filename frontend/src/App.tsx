@@ -746,8 +746,14 @@ function App() {
     }
   };
 
+  const allowVerticalScroll = currentScreen === 'debates' || currentScreen === 'scoring';
+
   return (
-    <div className="w-full min-h-screen overflow-x-hidden overflow-y-auto">
+    <div
+      className={`w-full min-h-screen overflow-x-hidden ${
+        allowVerticalScroll ? 'h-auto overflow-y-auto' : 'h-[100dvh] overflow-y-hidden'
+      }`}
+    >
       {renderScreen()}
 
       {isAppEntryTransitionActive && (

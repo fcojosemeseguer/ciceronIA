@@ -70,21 +70,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
   };
 
   return (
-    <div className="app-shell min-h-screen overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1040px] px-5 py-8 pb-20 sm:px-8">
-        <BrandHeader className="mb-8" />
+    <div className="app-shell h-[100dvh] overflow-y-hidden">
+      <div className="mx-auto flex h-full w-full max-w-[1040px] flex-col px-5 py-8 sm:px-8">
+        <BrandHeader className="mb-6" />
 
         {onBack && (
           <button
             onClick={onBack}
-            className="mb-6 inline-flex items-center gap-2 rounded-xl border border-[#1C1D1F] bg-[#F5F5F3] px-4 py-2 text-[#2C2C2C] transition-opacity hover:opacity-80"
+            className="mb-4 inline-flex w-auto self-start items-center gap-2 rounded-xl border border-[#1C1D1F] bg-[#F5F5F3] px-4 py-2 text-[#2C2C2C] transition-opacity hover:opacity-80"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Volver</span>
           </button>
         )}
 
-        <div className="mx-auto max-w-[520px] rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-6 sm:p-7">
+        <div className="flex flex-1 items-center justify-center">
+          <div className="mx-auto w-full max-w-[620px] rounded-[20px] border-[3px] border-[#1C1D1F] bg-[#ECECE9] p-7 sm:p-8">
           <h1 className="mb-2 text-center text-[38px] leading-none text-[#2C2C2C] sm:text-[46px]">
             {isLogin ? 'Iniciar sesion' : 'Crear cuenta'}
           </h1>
@@ -195,6 +196,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack,
               {isLogin ? 'Registrate' : 'Inicia sesion'}
             </button>
           </p>
+          </div>
         </div>
       </div>
     </div>

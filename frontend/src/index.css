@@ -547,3 +547,30 @@ textarea:focus {
 .timer-overtime-switch {
   animation: timer-overtime-switch 1s steps(1, end) infinite;
 }
+
+.landing-birds-motion {
+  opacity: 0.14;
+  animation: landing-birds-fly-lower-right 24s linear infinite;
+  filter: blur(0.2px);
+  will-change: transform, opacity;
+}
+
+@keyframes landing-birds-fly-lower-right {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-2deg) scale(0.95);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.16;
+  }
+  18% { transform: translateX(8vw) translateY(-14px) rotate(-1deg) scale(0.97); }
+  32% { transform: translateX(15vw) translateY(-30px) rotate(1deg) scale(0.99); }
+  48% { transform: translateX(23vw) translateY(-52px) rotate(0deg) scale(1); }
+  64% { transform: translateX(31vw) translateY(-74px) rotate(-1deg) scale(0.98); }
+  80% { transform: translateX(39vw) translateY(-96px) rotate(1deg) scale(1); }
+  92% { transform: translateX(46vw) translateY(-118px) rotate(0deg) scale(0.97); }
+  100% {
+    transform: translateX(52vw) translateY(-136px) rotate(-1deg) scale(0.95);
+    opacity: 0;
+  }
+}

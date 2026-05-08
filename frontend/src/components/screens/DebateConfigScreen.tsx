@@ -153,60 +153,60 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
   };
 
   return (
-    <div className="app-shell overflow-y-auto">
-      <div className="px-5 py-8 pb-32 sm:px-8">
-        <div className="mx-auto w-full max-w-[1040px]">
-          <BrandHeader className="mb-8" />
+    <div className="app-shell overflow-y-hidden">
+      <div className="flex h-[calc(100dvh-108px)] items-center px-5 py-4 sm:px-8 sm:py-5">
+        <div className="mx-auto w-full max-w-[1080px]">
+          <BrandHeader className="mb-5" />
           <Breadcrumbs
-            className="mb-4"
+            className="mb-3"
             items={[
               { label: 'Panel de Control', onClick: onGoDashboard || onBack },
               { label: 'Nuevo Debate', onClick: onGoDebateMode || onBack },
               { label: currentStep },
             ]}
           />
-          <div className="mb-6">
-            <h1 className="text-[46px] sm:text-[56px] leading-none text-[#2C2C2C]">{pageTitle}</h1>
+          <div className="mb-4">
+            <h1 className="text-[42px] sm:text-[50px] leading-none text-[#2C2C2C]">{pageTitle}</h1>
           </div>
 
           {activeError && (
-            <div className="mb-6 rounded-xl border border-red-400 bg-red-100 px-5 py-4 text-base text-red-700">
+            <div className="mb-4 rounded-xl border border-red-400 bg-red-100 px-5 py-3 text-sm text-red-700">
               {activeError}
             </div>
           )}
 
-          <div className="mx-auto max-w-[760px] rounded-[20px] p-4 sm:p-5" style={{ background: panelColor }}>
-            <div className="space-y-4">
+          <div className="mx-auto max-w-[860px] rounded-[20px] p-4 sm:p-5" style={{ background: panelColor }}>
+            <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
+                <label className="mb-1 block text-[21px] font-medium leading-none sm:text-[23px]" style={mutedTextStyle}>
                   Nombre debate:
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleFieldChange('name', e.target.value)}
-                  className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
+                  className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[19px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
                   placeholder="Nombre del debate"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
+                <label className="mb-1 block text-[21px] font-medium leading-none sm:text-[23px]" style={mutedTextStyle}>
                   Tema:
                 </label>
                 <input
                   type="text"
                   value={formData.debate_topic}
                   onChange={(e) => handleFieldChange('debate_topic', e.target.value)}
-                  className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
+                  className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[19px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
                   placeholder="Tema del debate"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
+                <label className="mb-1 block text-[21px] font-medium leading-none sm:text-[23px]" style={mutedTextStyle}>
                   Nombre equipos:
                 </label>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -214,7 +214,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     type="text"
                     value={formData.team_a_name}
                     onChange={(e) => handleFieldChange('team_a_name', e.target.value)}
-                    className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
+                    className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[19px] outline-none placeholder:opacity-60"
                     style={fieldStyle}
                     placeholder="Equipo a favor"
                   />
@@ -222,7 +222,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     type="text"
                     value={formData.team_b_name}
                     onChange={(e) => handleFieldChange('team_b_name', e.target.value)}
-                    className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
+                    className="w-full rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[19px] outline-none placeholder:opacity-60"
                     style={fieldStyle}
                     placeholder="Equipo en contra"
                   />
@@ -230,7 +230,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
               </div>
 
               <div>
-                <label className="mb-2 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
+                <label className="mb-1 block text-[20px] font-medium leading-none sm:text-[22px]" style={mutedTextStyle}>
                   Colores equipos:
                 </label>
                 <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
@@ -241,15 +241,15 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                         type="button"
                         key={`${palette.a}-${palette.b}`}
                         onClick={() => setSelectedPalette(index)}
-                        className="inline-flex h-[44px] w-full items-center justify-center gap-2 rounded-[12px] border px-2"
+                        className="inline-flex h-[40px] w-full items-center justify-center gap-2 rounded-[12px] border px-2"
                         style={{
                           borderColor: active ? '#1C1D1F' : 'rgba(245,245,243,0.55)',
                           background: active ? '#1C1D1F' : '#F5F5F3',
                         }}
                         aria-label={`Paleta ${index + 1}`}
                       >
-                        <span className="h-6 w-6 rounded-full" style={{ background: palette.a }} />
-                        <span className="h-6 w-6 rounded-full" style={{ background: palette.b }} />
+                        <span className="h-5 w-5 rounded-full" style={{ background: palette.a }} />
+                        <span className="h-5 w-5 rounded-full" style={{ background: palette.b }} />
                       </button>
                     );
                   })}
@@ -257,14 +257,14 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
               </div>
 
               <div>
-                <label className="mb-1 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
+                <label className="mb-1 block text-[20px] font-medium leading-none sm:text-[22px]" style={mutedTextStyle}>
                   Formato:
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => handleFieldChange('debate_type', 'upct')}
-                    className="rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px]"
+                    className="rounded-[14px] border px-4 py-2 text-[17px] sm:text-[18px]"
                     style={{
                       borderColor: 'transparent',
                       background: formData.debate_type === 'upct' ? '#1C1D1F' : '#F5F5F3',
@@ -276,7 +276,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => handleFieldChange('debate_type', 'retor')}
-                    className="rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px]"
+                    className="rounded-[14px] border px-4 py-2 text-[17px] sm:text-[18px]"
                     style={{
                       borderColor: 'transparent',
                       background: formData.debate_type === 'retor' ? '#1C1D1F' : '#F5F5F3',
@@ -289,14 +289,14 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
               </div>
 
               <div>
-                <label className="mb-1 block text-[22px] font-medium leading-none sm:text-[24px]" style={mutedTextStyle}>
-                  Descripcion: <span className="text-[16px] font-medium sm:text-[18px]">(opc)</span>
+                <label className="mb-1 block text-[20px] font-medium leading-none sm:text-[22px]" style={mutedTextStyle}>
+                  Descripcion: <span className="text-[14px] font-medium sm:text-[16px]">(opc)</span>
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => handleFieldChange('description', e.target.value)}
-                  rows={3}
-                  className="w-full resize-none rounded-[14px] border px-4 py-2.5 text-[18px] sm:text-[20px] outline-none placeholder:opacity-60"
+                  rows={2}
+                  className="w-full resize-none rounded-[14px] border px-4 py-2 text-[17px] sm:text-[18px] outline-none placeholder:opacity-60"
                   style={fieldStyle}
                   placeholder="Descripcion opcional"
                 />
@@ -304,11 +304,11 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
             </div>
           </div>
 
-          <div className="mx-auto mt-6 max-w-[420px]">
+          <div className="mx-auto mt-4 max-w-[390px]">
             <LiquidGlassButton
               onClick={handleSubmit}
               variant="primary"
-              className="w-full rounded-[14px] border-0 py-3.5 text-[28px] font-semibold leading-none text-[#2C2C2C] sm:text-[30px]"
+              className="w-full rounded-[14px] border-0 py-3 text-[24px] font-semibold leading-none text-[#2C2C2C] sm:text-[26px]"
               style={{
                 background: mode === 'live' ? 'var(--brand-gold)' : 'var(--brand-green)',
                 color: mode === 'live' ? 'var(--brand-brown)' : '#F5F5F3',
