@@ -24,6 +24,7 @@ interface UseAutoAudioRecordingProps {
 interface UseAutoAudioRecordingReturn {
   isRecording: boolean;
   audioError: string | null;
+  finalizeCurrentRecording: () => Promise<void>;
 }
 
 interface LiveRoundSnapshot {
@@ -157,6 +158,38 @@ export const useAutoAudioRecording = (
     [addRecording, addToAnalysisQueue, consumeDraftSegments, props]
   );
 
+  const finalizeActiveRecording = useCallback(async () => {
+    if (!recordingStartedRef.current || isStoppingRef.current) return;
+
+    const activeRound = activeRoundRef.current;
+    if (!activeRound) return;
+
+    const activeRoundId = buildRoundId(activeRound);
+    isStoppingRef.current = true;
+    finalizedRoundIdRef.current = activeRoundId;
+
+    try {
+      const segment = await stopRecording();
+      const validSegment =
+        segment && segment.blob && segment.blob.size > 0
+          ? {
+              ...segment,
+              team: activeRound.team,
+              roundType: activeRound.roundType,
+              order: activeRound.order,
+            }
+          : null;
+
+      await finalizeRoundRecording(activeRound, validSegment);
+    } catch (stopError) {
+      console.error('Error al finalizar la grabación automática:', stopError);
+    } finally {
+      isStoppingRef.current = false;
+      recordingStartedRef.current = false;
+      activeRoundRef.current = null;
+    }
+  }, [finalizeRoundRecording, stopRecording]);
+
   useEffect(() => {
     if (!props?.debateCode) return;
 
@@ -218,7 +251,7 @@ export const useAutoAudioRecording = (
     void stopRecording()
       .then(async (segment) => {
         const validSegment =
-          segment && segment.duration >= 1
+          segment && segment.blob && segment.blob.size > 0
             ? {
                 ...segment,
                 team: activeRound.team,
@@ -260,5 +293,6 @@ export const useAutoAudioRecording = (
   return {
     isRecording,
     audioError: error,
+    finalizeCurrentRecording: finalizeActiveRecording,
   };
 };

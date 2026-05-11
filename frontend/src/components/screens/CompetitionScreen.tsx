@@ -157,7 +157,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
     [queueAnalysis, updateAnalysisQueueStatus]
   );
 
-  const { audioError, isRecording } = useAutoAudioRecording({
+  const { audioError, isRecording, finalizeCurrentRecording } = useAutoAudioRecording({
     debateCode,
     onRecordingComplete: handleRecordingReady,
   });
@@ -377,7 +377,14 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
     else if (state === 'setup') startDebate();
   };
 
-  const handleBottomAction = () => {
+  const handleTopAction = async () => {
+    await finalizeCurrentRecording();
+    goToNextTeamATurn();
+  };
+
+  const handleBottomAction = async () => {
+    await finalizeCurrentRecording();
+
     if (isLastRound) {
       finishDebate();
       return;
@@ -448,7 +455,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
 
                     <div className="my-auto space-y-3">
                       <button
-                        onClick={() => goToNextTeamATurn()}
+                        onClick={handleTopAction}
                         disabled={!topActionEnabled}
                         className="flex h-[76px] w-full items-center justify-center rounded-[18px] border-[4px]"
                         style={{

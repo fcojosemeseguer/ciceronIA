@@ -23,6 +23,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const audioChunksRef = useRef<Float32Array[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
+  const isRecordingRef = useRef(false);
 
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +97,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       source.connect(processor);
       processor.connect(audioContext.destination);
 
+      isRecordingRef.current = true;
       setIsRecording(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al acceder al micrófono';
@@ -105,7 +107,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   }, [clearError]);
 
     const stopRecording = useCallback(async (): Promise<AudioRecording | null> => {
-    if (!isRecording || !audioContextRef.current) {
+    if (!isRecordingRef.current || !audioContextRef.current) {
       return null;
     }
 
@@ -122,6 +124,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       // Validar que hay datos de audio
       if (totalLength === 0) {
         console.warn('No se capturó audio - buffer vacío');
+        isRecordingRef.current = false;
         setIsRecording(false);
         return null;
       }
@@ -138,6 +141,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       // Cerrar AudioContext temporal
       await audioContext.close();
 
+      isRecordingRef.current = false;
       setIsRecording(false);
 
       // Convertir a WAV
@@ -162,10 +166,11 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       // Asegurar que el AudioContext se cierre incluso si hay error
       await cleanupMediaResources();
       
+      isRecordingRef.current = false;
       setIsRecording(false);
       return null;
     }
-  }, [cleanupMediaResources, isRecording]);
+  }, [cleanupMediaResources]);
 
   useEffect(() => {
     return () => {
