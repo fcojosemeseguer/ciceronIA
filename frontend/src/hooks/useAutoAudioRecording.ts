@@ -208,7 +208,7 @@ export const useAutoAudioRecording = (
     const currentRound = getCurrentRound();
     const currentRoundId = buildRoundId(currentRound);
     const roundChanged = Boolean(currentRoundId && currentRoundId !== activeRoundId);
-    const shouldFinalize = timeRemaining === 0 || roundChanged || debateState === 'finished';
+    const shouldFinalize = timeRemaining <= 0 || roundChanged || debateState === 'finished';
     const shouldPause = !shouldFinalize && (debateState === 'paused' || !isTimerRunning);
 
     if (!shouldFinalize && !shouldPause) return;

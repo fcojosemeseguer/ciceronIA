@@ -10,6 +10,7 @@ Para anadir un nuevo tipo de debate:
 from data.debate_types.base import DebateTypeConfig
 from data.debate_types.upct import UPCT_CONFIG
 from data.debate_types.retor import RETOR_CONFIG
+from data.debate_types.demo import DEMO_CONFIG
 from data.prompts.prompts import (
     system_prompt_evaluation as upct_system_prompt,
     normativa_fases_upct,
@@ -24,10 +25,14 @@ UPCT_CONFIG.normativa = normativa_fases_upct
 RETOR_CONFIG.system_prompt = system_prompt_retor
 RETOR_CONFIG.normativa = normativa_retor
 
+DEMO_CONFIG.system_prompt = upct_system_prompt
+DEMO_CONFIG.normativa = normativa_fases_upct
+
 # Registro de tipos de debate: id -> config
 DEBATE_TYPES: dict[str, DebateTypeConfig] = {
     "upct": UPCT_CONFIG,
     "retor": RETOR_CONFIG,
+    "demo": DEMO_CONFIG,
 }
 
 DEFAULT_DEBATE_TYPE = "upct"

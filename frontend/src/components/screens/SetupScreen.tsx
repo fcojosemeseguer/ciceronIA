@@ -41,6 +41,18 @@ const DEBATE_TYPES = [
     color: 'from-white/20 to-white/5',
     features: ['Gestión libre de tiempo', 'Minuto de oro disponible', 'Mayor flexibilidad'],
   },
+  {
+    id: 'demo',
+    name: 'Demo',
+    description: 'Formato corto para demostración: introducciones, argumentos y conclusión.',
+    rounds: [
+      { name: 'Introducción', time: '40 s', speakers: '1 por equipo' },
+      { name: 'Argumentos', time: '40 s', speakers: '1 por equipo' },
+      { name: 'Conclusión', time: '30 s', speakers: '1 por equipo' },
+    ],
+    color: 'from-white/20 to-white/5',
+    features: ['Formato rápido', 'Tres bloques visuales', 'Ideal para demo'],
+  },
 ];
 
 export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack }) => {
@@ -88,14 +100,21 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
     }
     
     // Configurar duraciones según el tipo de debate seleccionado
-    const roundDurations = selectedType === 'upct' 
+    const roundDurations = selectedType === 'demo'
       ? {
+          introduccion: 40,
+          primerRefutador: 40,
+          segundoRefutador: 40,
+          conclusion: 30,
+        }
+      : selectedType === 'upct'
+        ? {
           introduccion: 180,      // 3 minutos
           primerRefutador: 240,   // 4 minutos
           segundoRefutador: 240,  // 4 minutos
           conclusion: 180,        // 3 minutos
         }
-      : {
+        : {
           introduccion: 360,      // 6 minutos (Contextualización)
           primerRefutador: 120,   // 2 minutos (Definición)
           segundoRefutador: 300,  // 5 minutos (Valoración)
@@ -107,6 +126,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onStartDebate, onBack 
       teamAName: formData.teamAName,
       teamBName: formData.teamBName,
       debateTopic: formData.debateTopic,
+      debateType: selectedType,
       roundDurations,
     };
     

@@ -25,6 +25,7 @@ const defaultConfig: DebateConfig = {
   teamAName: 'A favor',
   teamBName: 'En contra',
   debateTopic: 'Tema del Debate',
+  debateType: 'upct',
   roundDurations: {
     introduccion: 180,
     primerRefutador: 240,
@@ -156,25 +157,33 @@ export const useDebateStore = create<DebateStore>()(
     // Inicializar debate desde un proyecto (unifica debate y proyecto)
     initializeDebateFromProject: (project: Project, debateCode?: string) => {
       // Determinar duraciones según el tipo de debate
-      const isRetor = project.debate_type === 'retor';
-      const roundDurations = isRetor
-        ? {
-            introduccion: 360,      // 6 minutos (Contextualización)
-            primerRefutador: 120,   // 2 minutos (Definición)
-            segundoRefutador: 300,  // 5 minutos (Valoración)
-            conclusion: 180,        // 3 minutos
-          }
-        : {
-            introduccion: 180,      // 3 minutos
-            primerRefutador: 240,   // 4 minutos
-            segundoRefutador: 240,  // 4 minutos
-            conclusion: 180,        // 3 minutos
-          };
+      const roundDurations =
+        project.debate_type === 'retor'
+          ? {
+              introduccion: 360,      // 6 minutos (Contextualización)
+              primerRefutador: 120,   // 2 minutos (Definición)
+              segundoRefutador: 300,  // 5 minutos (Valoración)
+              conclusion: 180,        // 3 minutos
+            }
+          : project.debate_type === 'demo'
+            ? {
+                introduccion: 40,
+                primerRefutador: 40,
+                segundoRefutador: 40,
+                conclusion: 30,
+              }
+            : {
+                introduccion: 180,      // 3 minutos
+                primerRefutador: 240,   // 4 minutos
+                segundoRefutador: 240,  // 4 minutos
+                conclusion: 180,        // 3 minutos
+              };
 
       const config: DebateConfig = {
         teamAName: project.team_a_name || 'A favor',
         teamBName: project.team_b_name || 'En contra',
         debateTopic: project.debate_topic || project.name || 'Tema del Debate',
+        debateType: project.debate_type || 'upct',
         roundDurations,
       };
 

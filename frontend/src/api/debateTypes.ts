@@ -29,6 +29,19 @@ const RETOR_FASES = [
   { id: 'conc', nombre: 'Conclusión', descripcion: 'Cierre del debate - Orador único (3 min)', tiempo_segundos: 180, permite_preguntas: false, permite_minuto_oro: false, orador_unico: true },
 ];
 
+// Fases para demo rápida
+const DEMO_FASES = [
+  { id: 'intro', nombre: 'Introducción', descripcion: 'Apertura breve del debate (40s)', tiempo_segundos: 40, permite_preguntas: false, permite_minuto_oro: false },
+  { id: 'args', nombre: 'Argumentos', descripcion: 'Exposición principal de argumentos (40s)', tiempo_segundos: 40, permite_preguntas: false, permite_minuto_oro: false },
+  { id: 'conc', nombre: 'Conclusión', descripcion: 'Cierre breve del debate (30s)', tiempo_segundos: 30, permite_preguntas: false, permite_minuto_oro: false },
+];
+
+const getFasesForDebateType = (debateTypeId: string) => {
+  if (debateTypeId === 'retor') return RETOR_FASES;
+  if (debateTypeId === 'demo') return DEMO_FASES;
+  return UPCT_FASES;
+};
+
 export const debateTypesService = {
   /**
    * Obtener todos los tipos de debate disponibles
@@ -41,7 +54,7 @@ export const debateTypesService = {
       id: dt.id,
       nombre: dt.nombre,
       descripcion: dt.descripcion,
-      fases: dt.id === 'retor' ? RETOR_FASES : UPCT_FASES,
+      fases: getFasesForDebateType(dt.id),
       posturas: ['A Favor', 'En Contra'],
       escala_min: dt.id === 'retor' ? 1 : 0,
       escala_max: dt.id === 'retor' ? 5 : 4,

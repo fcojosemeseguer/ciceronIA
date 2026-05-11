@@ -7,6 +7,7 @@ export type RoundType =
   | 'Introducción' 
   | 'Primer Refutador' 
   | 'Segundo Refutador' 
+  | 'Argumentos'
   | 'Conclusión'
   | 'Contextualización'  // RETOR
   | 'Definición'         // RETOR
@@ -46,6 +47,7 @@ export interface DebateConfig {
   teamAName: string;
   teamBName: string;
   debateTopic: string;
+  debateType?: string;
   roundDurations: {
     introduccion: number;
     primerRefutador: number;

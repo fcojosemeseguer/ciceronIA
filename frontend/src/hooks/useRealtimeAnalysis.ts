@@ -30,6 +30,7 @@ export interface UseRealtimeAnalysisReturn {
 const mapRoundTypeToFase = (roundType: RoundType): string => {
   const mapping: Record<RoundType, string> = {
     'Introducción': 'introduccion',
+    'Argumentos': 'argumentos',
     'Primer Refutador': 'refutacion1',
     'Segundo Refutador': 'refutacion2',
     'Conclusión': 'conclusion',
@@ -148,7 +149,9 @@ export const useRealtimeAnalysis = (
       };
 
       syncQueue([...queueRef.current, queuedItem]);
-      void processNextInQueue();
+      setTimeout(() => {
+        void processNextInQueue();
+      }, 0);
 
       const checkInterval = setInterval(() => {
         const item = queueRef.current.find((entry) => entry.id === recording.id);

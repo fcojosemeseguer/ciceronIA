@@ -260,7 +260,7 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                 <label className="mb-1 block text-[20px] font-medium leading-none sm:text-[22px]" style={mutedTextStyle}>
                   Formato:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => handleFieldChange('debate_type', 'upct')}
@@ -284,6 +284,18 @@ export const DebateConfigScreen: React.FC<DebateConfigScreenProps> = ({
                     }}
                   >
                     RETOR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldChange('debate_type', 'demo')}
+                    className="rounded-[14px] border px-4 py-2 text-[17px] sm:text-[18px]"
+                    style={{
+                      borderColor: 'transparent',
+                      background: formData.debate_type === 'demo' ? '#1C1D1F' : '#F5F5F3',
+                      color: formData.debate_type === 'demo' ? '#F5F5F3' : '#2C2C2C',
+                    }}
+                  >
+                    DEMO
                   </button>
                 </div>
               </div>

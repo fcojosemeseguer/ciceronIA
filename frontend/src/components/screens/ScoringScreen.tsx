@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import { useDebateStore } from '../../store/debateStore';
 import { useDebateHistoryStore } from '../../store/debateHistoryStore';
-import { useAuthStore } from '../../store/authStore';
 import { debatesService } from '../../api/debates';
 import {
   DEBATE_RUBRIC,
@@ -189,8 +188,6 @@ const DEMO_SEGMENTS: ProjectSegment[] = DEMO_ANALYSIS_RESULTS.map((result, index
   created_at: new Date(2026, 4, 3, 10, index * 7).toISOString(),
 }));
 
-const isTestUser = (value?: string | null) => value?.trim().toLowerCase() === 'test';
-
 const getScoreColorClass = (score: number) => {
   if (score >= 4) return 'text-[#3A7D44]';
   if (score >= 3) return 'text-[#3A6EA5]';
@@ -242,18 +239,42 @@ const buildCriterionAverages = (results: AnalysisResult[]) => {
     .slice(0, 8);
 };
 
-const getSegmentMetrics = (segments: ProjectSegment[]) =>
-  segments.flatMap((segment) => {
-    const source = segment.metrics_raw && Object.keys(segment.metrics_raw).length > 0
-      ? segment.metrics_raw
-      : segment.metrics_summary;
+const PROSODY_METRICS = [
+  {
+    label: 'Expresividad tonal',
+    shortLabel: 'Tono',
+    keys: ['F0semitoneFrom27.5Hz_sma3nz_stddevNorm'],
+    max: 0.3,
+    hint: 'Variación de tono',
+    color: '#3A6EA5',
+  },
+  {
+    label: 'Proyección',
+    shortLabel: 'Voz',
+    keys: ['loudness_sma3_amean'],
+    max: 2,
+    hint: 'Volumen percibido',
+    color: '#3A7D44',
+  },
+  {
+    label: 'Énfasis',
+    shortLabel: 'Énfasis',
+    keys: ['loudness_sma3_stddevNorm', 'loudnessPeaksPerSec'],
+    max: 3,
+    hint: 'Variación de intensidad',
+    color: '#B8872A',
+  },
+  {
+    label: 'Ritmo vocal',
+    shortLabel: 'Ritmo',
+    keys: ['VoicedSegmentsPerSec'],
+    max: 2.5,
+    hint: 'Segmentos vocales/seg',
+    color: '#6B5DD3',
+  },
+] as const;
 
-    return Object.values(source || {});
-  });
-
-const buildProsodyProfile = (segments: ProjectSegment[]) => {
-  const metrics = getSegmentMetrics(segments);
-  const averageMetric = (keys: string[]) => {
+const averageMetricValue = (metrics: Record<string, number | null>[], keys: readonly string[]) => {
     const values = metrics.flatMap((item) =>
       keys
         .map((key) => item?.[key])
@@ -262,59 +283,37 @@ const buildProsodyProfile = (segments: ProjectSegment[]) => {
 
     if (!values.length) return null;
     return values.reduce((sum, value) => sum + value, 0) / values.length;
-  };
-
-  return [
-    {
-      label: 'Expresividad tonal',
-      shortLabel: 'Tono',
-      value: averageMetric(['F0semitoneFrom27.5Hz_sma3nz_stddevNorm']),
-      max: 0.3,
-      hint: 'Variación de tono',
-      color: '#3A6EA5',
-    },
-    {
-      label: 'Proyección',
-      shortLabel: 'Voz',
-      value: averageMetric(['loudness_sma3_amean']),
-      max: 2,
-      hint: 'Volumen percibido',
-      color: '#3A7D44',
-    },
-    {
-      label: 'Énfasis',
-      shortLabel: 'Énfasis',
-      value: averageMetric(['loudness_sma3_stddevNorm', 'loudnessPeaksPerSec']),
-      max: 3,
-      hint: 'Variación de intensidad',
-      color: '#B8872A',
-    },
-    {
-      label: 'Ritmo vocal',
-      shortLabel: 'Ritmo',
-      value: averageMetric(['VoicedSegmentsPerSec']),
-      max: 2.5,
-      hint: 'Segmentos vocales/seg',
-      color: '#6B5DD3',
-    },
-    {
-      label: 'Pausas',
-      shortLabel: 'Pausas',
-      value: averageMetric(['MeanUnvoicedSegmentLength']),
-      max: 0.25,
-      hint: 'Silencios medios',
-      color: '#C44536',
-    },
-    {
-      label: 'Estabilidad',
-      shortLabel: 'Control',
-      value: averageMetric(['jitterLocal_sma3nz_amean', 'shimmerLocaldB_sma3nz_amean']),
-      max: 1.6,
-      hint: 'Jitter + shimmer',
-      color: '#2C2C2C',
-    },
-  ];
 };
+
+const buildProsodyBySegment = (segments: ProjectSegment[]) =>
+  segments.map((segment, index) => {
+    const source = segment.metrics_raw && Object.keys(segment.metrics_raw).length > 0
+      ? segment.metrics_raw
+      : segment.metrics_summary;
+    const metrics = Object.values(source || {});
+
+    return {
+      key: `${segment.segment_id}-${index}`,
+      phase: segment.fase_nombre,
+      posture: segment.postura,
+      speaker: segment.orador,
+      team: getResultTeam({
+        postura: segment.postura,
+        fase: segment.fase_nombre,
+        criterios: [],
+        total: 0,
+        max_total: 1,
+        message: '',
+        orador: segment.orador,
+        debate_type: segment.debate_type,
+      }),
+      durationSeconds: segment.duration_seconds,
+      metrics: PROSODY_METRICS.map((metric) => ({
+        ...metric,
+        value: averageMetricValue(metrics, metric.keys),
+      })),
+    };
+  });
 
 const buildDurationProfile = (segments: ProjectSegment[]) =>
   segments
@@ -344,9 +343,8 @@ const getProsodyReading = (percent: number) => {
 export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, onBack }) => {
   const { config, recordings, getAnalysisResults, getTeamScoreFromAnalysis, currentDebateCode, analysisQueue } = useDebateStore();
   const { addDebate } = useDebateHistoryStore();
-  const { user } = useAuthStore();
-  const isDemoUser = isTestUser(user?.name) || isTestUser(user?.id) || isTestUser(user?.email);
   const resolvedDebateCode = debate?.code || currentDebateCode || '';
+  const isDemoUser = resolvedDebateCode === 'demo-test-debate';
   const persistedColors = useMemo(
     () => (resolvedDebateCode ? loadDebateTeamColors(resolvedDebateCode) : null),
     [resolvedDebateCode]
@@ -438,7 +436,15 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, 
       setRemoteSegments(DEMO_SEGMENTS);
       return;
     }
-    if (!resolvedDebateCode) return;
+
+    setRemoteAnalysisResults([]);
+    setRemoteSegments([]);
+
+    if (!resolvedDebateCode) {
+      setIsLoadingRemoteAnalysis(false);
+      return;
+    }
+
     let cancelled = false;
 
     const hydrateAnalysis = async () => {
@@ -508,7 +514,7 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, 
     [analysisResults]
   );
   const visualCriteria = useMemo(() => buildCriterionAverages(analysisResults), [analysisResults]);
-  const prosodyProfile = useMemo(() => buildProsodyProfile(scoringSegments), [scoringSegments]);
+  const prosodyBySegment = useMemo(() => buildProsodyBySegment(scoringSegments), [scoringSegments]);
   const durationProfile = useMemo(() => buildDurationProfile(scoringSegments), [scoringSegments]);
   const maxDuration = useMemo(
     () => Math.max(1, ...durationProfile.map((item) => item.value)),
@@ -844,14 +850,14 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-xl border border-[#CFCFCD] bg-white p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.14em] text-[#5E5E5E]">Prosodica</p>
-                      <h3 className="text-xl font-bold text-[#2C2C2C]">Como sono el debate</h3>
+                      <h3 className="text-xl font-bold text-[#2C2C2C]">Como sono cada intervencion</h3>
                       <p className="mt-1 text-sm text-[#5E5E5E]">
-                        Lectura de voz a partir de metricas acusticas: tono, volumen, ritmo, pausas y estabilidad.
+                        Separado por fase y equipo para comparar introduccion, refutaciones y conclusion.
                       </p>
                     </div>
                     <span className="rounded-full bg-[#F5F5F3] px-3 py-1 text-xs text-[#5E5E5E]">
@@ -863,48 +869,67 @@ export const ScoringScreen: React.FC<ScoringScreenProps> = ({ debate, onFinish, 
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {prosodyProfile.map((metric) => {
-                      const percent =
-                        typeof metric.value === 'number'
-                          ? Math.min(100, Math.max(0, (metric.value / metric.max) * 100))
-                          : 0;
-                      const reading = getProsodyReading(percent);
+                  {prosodyBySegment.length > 0 ? (
+                    <div className="space-y-3">
+                      {prosodyBySegment.map((segment) => {
+                        const color = segment.team === 'A' ? teamAColor : teamBColor;
+                        return (
+                          <div key={segment.key} className="rounded-xl border border-[#CFCFCD] bg-[#F5F5F3] p-3">
+                            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-[#5E5E5E]">{segment.posture}</p>
+                                <h4 className="text-[20px] font-bold leading-tight text-[#2C2C2C]">{segment.phase}</h4>
+                                <p className="text-sm text-[#5E5E5E]">
+                                  {segment.speaker || 'Orador'} · {typeof segment.durationSeconds === 'number' ? `${Math.round(segment.durationSeconds)}s` : 'duracion N/A'}
+                                </p>
+                              </div>
+                              <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ background: color }}>
+                                {segment.team === 'A' ? scoringResult.teamAName : scoringResult.teamBName}
+                              </span>
+                            </div>
 
-                      return (
-                        <div
-                          key={`prosody-${metric.label}`}
-                          className="rounded-xl border border-[#CFCFCD] bg-[#F5F5F3] p-3"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <p className="truncate text-sm font-semibold text-[#2C2C2C]">{metric.shortLabel}</p>
-                            <p className="text-xs text-[#5E5E5E]">
-                              {typeof metric.value === 'number' ? metric.value.toFixed(2) : 'N/A'}
-                            </p>
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                              {segment.metrics.map((metric) => {
+                                const percent =
+                                  typeof metric.value === 'number'
+                                    ? Math.min(100, Math.max(0, (metric.value / metric.max) * 100))
+                                    : 0;
+                                const reading = getProsodyReading(percent);
+
+                                return (
+                                  <div key={`${segment.key}-${metric.label}`}>
+                                    <div className="mb-1 flex items-center justify-between gap-2">
+                                      <p className="text-sm font-semibold text-[#2C2C2C]">{metric.shortLabel}</p>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold ${reading.className}`}>{reading.label}</span>
+                                        <span className="text-xs text-[#5E5E5E]">
+                                          {typeof metric.value === 'number' ? metric.value.toFixed(2) : 'N/A'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="h-2.5 overflow-hidden rounded-full bg-white">
+                                      <div
+                                        className="h-full rounded-full"
+                                        style={{
+                                          width: `${Math.max(3, percent)}%`,
+                                          background: metric.color,
+                                        }}
+                                      />
+                                    </div>
+                                    <p className="mt-1 text-xs text-[#5E5E5E]">{metric.hint} · {reading.detail}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                          <svg viewBox="0 0 88 88" className="mx-auto h-20 w-20">
-                            <circle cx="44" cy="44" r="34" fill="none" stroke="#FFFFFF" strokeWidth="10" />
-                            <circle
-                              cx="44"
-                              cy="44"
-                              r="34"
-                              fill="none"
-                              stroke={metric.color}
-                              strokeWidth="10"
-                              strokeLinecap="round"
-                              strokeDasharray={`${percent * 2.14} 214`}
-                              transform="rotate(-90 44 44)"
-                            />
-                            <text x="44" y="48" textAnchor="middle" className="fill-[#2C2C2C] text-[15px] font-bold">
-                              {Math.round(percent)}
-                            </text>
-                          </svg>
-                          <p className={`mt-1 text-center text-sm font-bold ${reading.className}`}>{reading.label}</p>
-                          <p className="text-center text-xs text-[#5E5E5E]">{metric.hint} · {reading.detail}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-[#F5F5F3] p-4 text-sm text-[#5E5E5E]">
+                      No hay metricas prosodicas por intervencion para este debate.
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-xl border border-[#CFCFCD] bg-white p-4">

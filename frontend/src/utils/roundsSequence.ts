@@ -1,6 +1,6 @@
 /**
  * Configuración secuencial de rondas del debate
- * Soporta formatos UPCT (Académico) y RETOR
+ * Soporta formatos UPCT (Académico), RETOR y DEMO
  */
 
 import { DebateRound, RoundType, DebateConfig } from '../types';
@@ -30,14 +30,29 @@ export const ROUNDS_SEQUENCE_RETOR: Omit<DebateRound, 'id' | 'duration'>[] = [
   { order: 8, team: 'B', roundType: 'Conclusión' },  // B segundo en RETOR
 ];
 
+// Secuencia corta para demos: 40s, 40s y 30s por equipo
+export const ROUNDS_SEQUENCE_DEMO: Omit<DebateRound, 'id' | 'duration'>[] = [
+  { order: 1, team: 'A', roundType: 'Introducción' },
+  { order: 2, team: 'B', roundType: 'Introducción' },
+  { order: 3, team: 'A', roundType: 'Argumentos' },
+  { order: 4, team: 'B', roundType: 'Argumentos' },
+  { order: 5, team: 'A', roundType: 'Conclusión' },
+  { order: 6, team: 'B', roundType: 'Conclusión' },
+];
+
+const getRoundSequence = (config?: DebateConfig) => {
+  if (config?.debateType === 'demo') return ROUNDS_SEQUENCE_DEMO;
+  if (config?.debateType === 'retor' || config?.roundDurations.introduccion === 360) {
+    return ROUNDS_SEQUENCE_RETOR;
+  }
+  return ROUNDS_SEQUENCE_UPCT;
+};
+
 /**
  * Genera las rondas completas con duraciones específicas según el formato
  */
 export function generateDebateRounds(config: DebateConfig): DebateRound[] {
-  // Detectar formato por el tipo de duraciones o un flag en config
-  const isRetor = config.roundDurations.introduccion === 360; // 6 min = RETOR
-  
-  const sequence = isRetor ? ROUNDS_SEQUENCE_RETOR : ROUNDS_SEQUENCE_UPCT;
+  const sequence = getRoundSequence(config);
   
   return sequence.map((round, idx) => ({
     ...round,
@@ -59,6 +74,7 @@ function getDurationForRoundType(roundType: RoundType, config: DebateConfig): nu
       return durations.introduccion;
     case 'Primer Refutador':
     case 'Definición':
+    case 'Argumentos':
       return durations.primerRefutador;
     case 'Segundo Refutador':
     case 'Valoración':
@@ -82,8 +98,7 @@ export function getCurrentRoundInfo(roundIndex: number, config: DebateConfig) {
  * Verifica si es el último turno del debate
  */
 export function isLastRound(roundIndex: number, config?: DebateConfig): boolean {
-  const isRetor = config?.roundDurations.introduccion === 360;
-  const sequence = isRetor ? ROUNDS_SEQUENCE_RETOR : ROUNDS_SEQUENCE_UPCT;
+  const sequence = getRoundSequence(config);
   return roundIndex >= sequence.length - 1;
 }
 
@@ -125,6 +140,7 @@ export function normalizePhaseName(phaseName: string): string {
     'Valoracion': 'Valoracion',
     'Conclusion': 'Conclusion',
     'Introduccion': 'introduccion',
+    'Argumentos': 'argumentos',
     'Primer Refutador': 'refutacion1',
     'Segundo Refutador': 'refutacion2',
   };

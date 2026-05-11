@@ -122,7 +122,14 @@ export const mergeCriteriaNotes = (results: AnalysisResult[]): DashboardCriterio
   return Array.from(merged.values());
 };
 
-export const getPhaseSequence = (debateType: string) =>
-  debateType === 'retor'
-    ? ['Contextualización', 'Definición', 'Valoración', 'Conclusión']
-    : ['Introducción', 'Primer Refutador', 'Segundo Refutador', 'Conclusión'];
+export const getPhaseSequence = (debateType: string) => {
+  if (debateType === 'retor') {
+    return ['Contextualización', 'Definición', 'Valoración', 'Conclusión'];
+  }
+
+  if (debateType === 'demo') {
+    return ['Introducción', 'Argumentos', 'Conclusión'];
+  }
+
+  return ['Introducción', 'Primer Refutador', 'Segundo Refutador', 'Conclusión'];
+};

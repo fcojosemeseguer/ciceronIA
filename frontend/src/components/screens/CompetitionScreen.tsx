@@ -55,6 +55,18 @@ const formatTimer = (seconds: number) => {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 };
 
+const getRoundDurationsForDebateType = (debateType: string) => {
+  if (debateType === 'retor') {
+    return { introduccion: 360, primerRefutador: 120, segundoRefutador: 300, conclusion: 180 };
+  }
+
+  if (debateType === 'demo') {
+    return { introduccion: 40, primerRefutador: 40, segundoRefutador: 40, conclusion: 30 };
+  }
+
+  return { introduccion: 180, primerRefutador: 240, segundoRefutador: 240, conclusion: 180 };
+};
+
 export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   project,
   debate,
@@ -97,7 +109,7 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
   const [selectedCriterionId, setSelectedCriterionId] = useState<string | null>(null);
   const autoOpenedSlotRef = useRef<string | null>(null);
-  const previousStateRef = useRef(state);
+  const finishNavigationSentRef = useRef(false);
   const isDashboardView = dashboardView ?? localDashboardView;
   const setDashboardView = onDashboardViewChange ?? setLocalDashboardView;
 
@@ -154,15 +166,14 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
     if (!debateData) return;
 
     if (debate) {
-      const isRetor = debate.debate_type === 'retor';
+      const roundDurations = getRoundDurationsForDebateType(debate.debate_type);
       initializeDebate(
         {
           teamAName: debate.team_a_name,
           teamBName: debate.team_b_name,
           debateTopic: debate.debate_topic,
-          roundDurations: isRetor
-            ? { introduccion: 360, primerRefutador: 120, segundoRefutador: 300, conclusion: 180 }
-            : { introduccion: 180, primerRefutador: 240, segundoRefutador: 240, conclusion: 180 },
+          debateType: debate.debate_type,
+          roundDurations,
         },
         debate.code
       );
@@ -170,14 +181,6 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
       initializeDebateFromProject(project, project.code);
     }
   }, [debateData, debate, project, initializeDebate, initializeDebateFromProject]);
-
-  useEffect(() => {
-    const previous = previousStateRef.current;
-    if (previous !== 'finished' && state === 'finished') {
-      onFinish?.();
-    }
-    previousStateRef.current = state;
-  }, [state, onFinish]);
 
   useEffect(() => {
     if (audioError) setRecordingError(audioError);
@@ -257,6 +260,38 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   const isLastRound = currentRoundIndex >= totalRounds - 1;
   const topActionEnabled = canNavigateToTeamATurn();
   const bottomActionEnabled = isLastRound || canNavigateToTeamBTurn();
+  const hasActiveAnalysis = analysisQueue.some((item) => item.status === 'pending' || item.status === 'analyzing');
+  const hasFinishedExpectedRecordings =
+    recordings.length >= Math.min(totalRounds, currentRoundIndex + 1) || Boolean(recordingError || audioError);
+
+  useEffect(() => {
+    if (state !== 'finished') {
+      finishNavigationSentRef.current = false;
+    }
+
+    const canLeaveFinishedDebate =
+      state === 'finished' &&
+      !finishNavigationSentRef.current &&
+      !isRecording &&
+      !hasActiveAnalysis &&
+      hasFinishedExpectedRecordings;
+
+    if (canLeaveFinishedDebate) {
+      finishNavigationSentRef.current = true;
+      onFinish?.();
+    }
+  }, [
+    audioError,
+    currentRoundIndex,
+    hasActiveAnalysis,
+    hasFinishedExpectedRecordings,
+    isRecording,
+    onFinish,
+    recordingError,
+    recordings.length,
+    state,
+    totalRounds,
+  ]);
 
   const slots: DashboardSlot[] = useMemo(
     () =>
