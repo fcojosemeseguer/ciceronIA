@@ -55,6 +55,7 @@ export const useAutoAudioRecording = (
   const activeRoundRef = useRef<LiveRoundSnapshot | null>(null);
   const finalizedRoundIdRef = useRef<string>('');
   const memoryDraftSegmentsRef = useRef<AudioRecording[]>([]);
+  const startRecordingPromiseRef = useRef<Promise<void> | null>(null);
 
   const consumeDraftSegments = useCallback(
     async (round: LiveRoundSnapshot) => {
@@ -169,6 +170,10 @@ export const useAutoAudioRecording = (
     finalizedRoundIdRef.current = activeRoundId;
 
     try {
+      if (startRecordingPromiseRef.current) {
+        await startRecordingPromiseRef.current;
+      }
+
       const segment = await stopRecording();
       const validSegment =
         segment && segment.blob && segment.blob.size > 0
@@ -228,7 +233,18 @@ export const useAutoAudioRecording = (
     };
 
     recordingStartedRef.current = true;
-    void startRecording();
+    const startPromise = startRecording()
+      .catch((startError) => {
+        recordingStartedRef.current = false;
+        activeRoundRef.current = null;
+        console.error('Error al iniciar la grabación automática:', startError);
+      })
+      .finally(() => {
+        if (startRecordingPromiseRef.current === startPromise) {
+          startRecordingPromiseRef.current = null;
+        }
+      });
+    startRecordingPromiseRef.current = startPromise;
   }, [debateState, getCurrentRound, isRecording, isTimerRunning, startRecording]);
 
   useEffect(() => {

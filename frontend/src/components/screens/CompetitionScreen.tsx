@@ -258,8 +258,9 @@ export const CompetitionScreen: React.FC<CompetitionScreenProps> = ({
   const teamBOvertime = !isTeamAActive && timeRemaining < 0;
   const totalRounds = rounds.length || 8;
   const isLastRound = currentRoundIndex >= totalRounds - 1;
-  const topActionEnabled = canNavigateToTeamATurn();
-  const bottomActionEnabled = isLastRound || canNavigateToTeamBTurn();
+  const canChangeTurn = state === 'running' && isRecording;
+  const topActionEnabled = canChangeTurn && canNavigateToTeamATurn();
+  const bottomActionEnabled = canChangeTurn && (isLastRound || canNavigateToTeamBTurn());
   const hasActiveAnalysis = analysisQueue.some((item) => item.status === 'pending' || item.status === 'analyzing');
   const hasFinishedExpectedRecordings =
     recordings.length >= Math.min(totalRounds, currentRoundIndex + 1) || Boolean(recordingError || audioError);
